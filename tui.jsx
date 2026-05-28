@@ -56,6 +56,7 @@ const tui = async (api, options) => {
       ? api.route.current.params.sessionID
       : null,
   )
+  const [turnRev, bumpTurnRev] = createSignal(0) // 强制状态栏重渲染
 
   // 轮询检测路由变更，更新 sessionID 信号
   const routePoll = setInterval(() => {
@@ -70,6 +71,7 @@ const tui = async (api, options) => {
 
   /** 获取当前 session 的轮次（用于状态栏响应式显示） */
   function getSessionTurns() {
+    turnRev() // 每次 autoDrive 递增，强制重渲染
     const sid = sessionID()
     if (!sid) return 0
     return state.turns.get(sid) ?? 0
@@ -121,18 +123,21 @@ const tui = async (api, options) => {
     const prompt = getPromptText(currentMode)
     if (!prompt) return
 
-    state.turns.set(sid, current + 1)
-
     try {
       const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
       const limitLabel = limit > 0 ? limit : "∞"
       console.warn(
         `[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`,
       )
+
       await api.client.session.prompt({
         sessionID: sid,
         parts: [{ type: "text", text: prompt }],
       })
+
+      // 发送成功后才计轮次
+      state.turns.set(sid, current + 1)
+      bumpTurnRev()
     } catch (err) {
       console.error(
         "[auto-drive] ❌",
