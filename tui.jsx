@@ -41,7 +41,6 @@ const tui = async (api, options) => {
   const maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
 
   const state = {
-    maxTurns: maxTurnsDefault,
     /** sessionID -> 已自动轮数 */
     turns: new Map(),
   }
@@ -57,6 +56,17 @@ const tui = async (api, options) => {
       ? api.route.current.params.sessionID
       : null,
   )
+
+  // 轮询检测路由变更，更新 sessionID 信号
+  const routePoll = setInterval(() => {
+    const route = api.route.current
+    if (route.name === "session" && route.params.sessionID !== sessionID()) {
+      setSessionID(route.params.sessionID)
+    }
+    if (route.name !== "session" && sessionID() !== null) {
+      setSessionID(null)
+    }
+  }, 2000)
 
   /** 获取当前 session 的轮次（用于状态栏响应式显示） */
   function getSessionTurns() {
@@ -132,12 +142,16 @@ const tui = async (api, options) => {
   }
 
   /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
-  function fireImmediate() {
+  async function fireImmediate() {
     const route = api.route.current
     if (route.name !== "session") return
     const sessionID = route.params.sessionID
     if (!sessionID) return
-    autoDrive({ properties: { sessionID } })
+    try {
+      await autoDrive({ properties: { sessionID } })
+    } catch {
+      // autoDrive 内部已 try/catch，此处仅防同步异常
+    }
   }
 
   /** 保存当前配置到项目级文件 */
@@ -238,7 +252,6 @@ const tui = async (api, options) => {
             return
           }
           setMaxTurns(option.value)
-          state.maxTurns = option.value
           setMode(chosenMode)
           config.mode = chosenMode
           if (chosenMode !== "stop") setLastMode(chosenMode)
@@ -264,7 +277,6 @@ const tui = async (api, options) => {
           const n = parseInt(value.trim(), 10)
           if (isNaN(n) || n < 0) return
           setMaxTurns(n)
-          state.maxTurns = n
           setMode(chosenMode)
           config.mode = chosenMode
           if (chosenMode !== "stop") setLastMode(chosenMode)
@@ -286,7 +298,10 @@ const tui = async (api, options) => {
         options={buildMenuOptions()}
         current={mode()}
         onSelect={(option) => {
-          if (option.value === "__sep__") return
+          if (option.value === "__sep__") {
+            api.ui.dialog.clear()
+            return
+          }
           if (option.value === "stop") {
             api.ui.dialog.clear()
             setMode("stop")
@@ -401,6 +416,7 @@ const tui = async (api, options) => {
   api.lifecycle.onDispose(() => {
     unregCmd()
     unsubEvent()
+    clearInterval(routePoll)
     state.turns.clear()
   })
 }
