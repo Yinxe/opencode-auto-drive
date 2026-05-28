@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal, Show } from "solid-js"
+import { createSignal } from "solid-js"
 import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
 import { join, dirname } from "path"
@@ -24,9 +24,9 @@ const DEFAULT_PRESETS = {
  *   Ctrl+P → auto-drive → Enter    切换开关
  *   或直接在输入框打 /auto-drive     切换开关
  *
- * 预设配置（tui.json）：
+ * 预设配置（tui.json 或 auto-drive.json）：
  *   "pluginConfig": {
- *     "auto-drive": { "enabled": true, "maxTurns": 10, "prompt": "继续优化" }
+ *     "auto-drive": { "mode": "继续优化", "maxTurns": 10, "customPrompt": "继续优化", "presets": { ... } }
  *   }
  */
 
@@ -35,7 +35,9 @@ async function readJSON(path) {
   try {
     const raw = await readFile(path, "utf-8")
     return JSON.parse(raw)
-  } catch {
+  } catch (err) {
+    if (err?.code === "ENOENT") return null
+    console.warn(`[auto-drive] 配置文件解析失败: ${path}`, err)
     return null
   }
 }
@@ -74,8 +76,8 @@ const tui = async (api, options) => {
   const { merged: config, projectPath } = await loadConfig(projectDir)
 
   // Options 最高优先级覆盖
-  if (options?.mode) config.mode = options.mode
-  if (options?.customPrompt) config.customPrompt = options.customPrompt
+  if (options?.mode !== undefined) config.mode = options.mode
+  if (options?.customPrompt !== undefined) config.customPrompt = options.customPrompt
   if (options?.presets) config.presets = { ...config.presets, ...options.presets }
 
   const state = {
@@ -98,7 +100,7 @@ const tui = async (api, options) => {
 
   /** 根据 mode 判断是否活跃 */
   function isActive(currentMode) {
-    return currentMode !== "stop" && getPromptText(currentMode) !== null
+    return currentMode !== "stop" && !!getPromptText(currentMode)
   }
 
   /** 计算所有会话的累计轮数 */
