@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal } from "solid-js"
+import { createSignal, Show } from "solid-js"
 
 /**
  * OpenCode 自动驾驶插件
@@ -26,7 +26,14 @@ const tui = async (api, options) => {
     turns: new Map(),
   }
 
-  const [rev, bump] = createSignal(0)
+  // ── Solid 信号：驱动底部状态栏响应式更新 ──
+  const [enabled, setEnabled] = createSignal(state.enabled)
+  const [turnCount, setTurnCount] = createSignal(0)
+
+  /** 计算所有会话的累计轮数 */
+  function computeTurnCount() {
+    return Array.from(state.turns.values()).reduce((a, b) => a + b, 0)
+  }
 
   /** 向会话发送下一轮提示词 */
   async function autoDrive(event) {
@@ -39,7 +46,7 @@ const tui = async (api, options) => {
     if (current >= state.maxTurns) return
 
     state.turns.set(sessionID, current + 1)
-    bump()
+    setTurnCount(computeTurnCount())
 
     try {
       console.warn(
@@ -60,8 +67,11 @@ const tui = async (api, options) => {
   /** 切换开关 */
   function toggle() {
     state.enabled = !state.enabled
-    if (!state.enabled) state.turns.clear()
-    bump()
+    setEnabled(state.enabled)
+    if (!state.enabled) {
+      state.turns.clear()
+      setTurnCount(0)
+    }
     api.ui.toast({
       message: state.enabled
         ? "🚀 自动驾驶已启用"
@@ -92,24 +102,19 @@ const tui = async (api, options) => {
     order: 100,
     slots: {
       app_bottom(ctx) {
-        rev() // 追踪信号，状态变更时自动重渲染
-        if (!state.enabled) {
-          return (
-            <box paddingLeft={1} paddingRight={1}>
-              <text fg={ctx.theme.current.textMuted}>⏸ auto-drive</text>
-            </box>
-          )
-        }
-        const total = Array.from(state.turns.values()).reduce(
-          (a, b) => a + b,
-          0,
-        )
         return (
           <box paddingLeft={1} paddingRight={1}>
-            <text fg={ctx.theme.current.primary}>🚀 auto-drive</text>
-            <text fg={ctx.theme.current.text}>
-              {" "}{total}/{state.maxTurns}
-            </text>
+            <Show
+              when={enabled()}
+              fallback={
+                <text fg={ctx.theme.current.textMuted}>⏸ auto-drive</text>
+              }
+            >
+              <text fg={ctx.theme.current.primary}>🚀 auto-drive</text>
+              <text fg={ctx.theme.current.text}>
+                {" "}{turnCount()}/{state.maxTurns}
+              </text>
+            </Show>
           </box>
         )
       },
