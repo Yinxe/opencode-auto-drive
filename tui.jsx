@@ -174,10 +174,27 @@ const tui = async (api, options) => {
       const label = modeMeta[currentMode]?.type === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
       const limitLabel = limit > 0 ? limit : "∞"
       console.log(`[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`)
-      await api.client.session.prompt({
-        sessionID: sid,
-        parts: [{ type: "text", text: prompt }],
-      })
+      // 内层重试：处理瞬时网络错误，session.idle 和 fireImmediate 两条路径都受益
+      const INNER_RETRIES = 2 // 初始尝试失败后最多重试 2 次
+      let promptErr
+      for (let attempt = 0; attempt <= INNER_RETRIES; attempt++) {
+        try {
+          await api.client.session.prompt({
+            sessionID: sid,
+            parts: [{ type: "text", text: prompt }],
+          })
+          promptErr = null
+          break
+        } catch (err) {
+          promptErr = err
+          if (attempt < INNER_RETRIES) {
+            const delay = RETRY_BASE_DELAY_MS * (attempt + 1)
+            console.log(`[auto-drive] ⏳ prompt 重试 ${attempt + 1}/${INNER_RETRIES} (${delay}ms)`)
+            await new Promise((r) => setTimeout(r, delay))
+          }
+        }
+      }
+      if (promptErr) throw promptErr
 
       // 发送成功后才计轮次和序列步进
       state.turns.set(sid, current + 1)
@@ -367,6 +384,11 @@ const tui = async (api, options) => {
           if (option.value === "custom") {
             api.ui.dialog.clear()
             showCustomPrompt()
+            return
+          }
+          if (option.value === "__config__") {
+            api.ui.dialog.clear()
+            showConfig()
             return
           }
           api.ui.dialog.clear()

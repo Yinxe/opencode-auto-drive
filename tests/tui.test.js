@@ -209,6 +209,7 @@ describe("autoDrive", () => {
 
   // ── 7. API failure ──
   it("returns false when session.prompt rejects", async () => {
+    vi.useRealTimers()
     const api = await setupWithConfig({ mode: "ai" })
     globalThis.__lastApi = api
     api.client.session.prompt.mockRejectedValue(
@@ -409,6 +410,109 @@ describe("showConfig", () => {
     configCmd.onSelect()
     expect(api.ui.dialog.setSize).toHaveBeenCalledWith("large")
     expect(api.ui.dialog.replace).toHaveBeenCalled()
+
+    // Call the render function to inspect dialog content
+    const renderFn = api.ui.dialog.replace.mock.calls[0][0]
+    const dialogJsx = renderFn()
+    expect(dialogJsx.props.title).toBe("Auto-Drive 配置")
+    expect(dialogJsx.props.options[0].title).toContain("🚀")
+    expect(dialogJsx.props.options[0].title).toContain("ai")
+    expect(dialogJsx.props.options[1].value).toBe("close")
+  })
+
+  it("shows stop mode in config dialog", async () => {
+    const api = await setupWithConfig({ mode: "stop" })
+    const cmds = api.command.register.mock.calls[0][0]()
+    const configCmd = cmds.find((c) => c.value === "auto-drive-config")
+    configCmd.onSelect()
+    const renderFn = api.ui.dialog.replace.mock.calls[0][0]
+    const dialogJsx = renderFn()
+    expect(dialogJsx.props.options[0].title).toContain("⏸")
+    expect(dialogJsx.props.options[0].title).toContain("stop")
+  })
+
+  it("close option clears dialog", async () => {
+    const api = await setupWithConfig({ mode: "ai" })
+    const cmds = api.command.register.mock.calls[0][0]()
+    const configCmd = cmds.find((c) => c.value === "auto-drive-config")
+    configCmd.onSelect()
+    const renderFn = api.ui.dialog.replace.mock.calls[0][0]
+    const dialogJsx = renderFn()
+    // Simulate selecting the close option
+    dialogJsx.props.onSelect({ value: "close" })
+    expect(api.ui.dialog.clear).toHaveBeenCalled()
+  })
+})
+
+// ── saveConfigFile ──
+
+describe("saveConfigFile", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it("calls saveProjectConfig with mode, maxTurns, customPrompt, presets", async () => {
+    const api = await setupWithConfig({ mode: "ai", maxTurns: 10, customPrompt: "test" })
+    const { saveProjectConfig } = await import("../loadConfig.js")
+    saveProjectConfig.mockClear()
+    await plugin.saveConfigFile()
+    expect(saveProjectConfig).toHaveBeenCalledTimes(1)
+    const [path, data] = saveProjectConfig.mock.calls[0]
+    expect(data.mode).toBe("ai")
+    expect(data.maxTurns).toBe(10)
+    expect(data.customPrompt).toBe("test")
+    expect(data.presets).toBeTruthy()
+  })
+
+  it("shows error toast when save fails", async () => {
+    const api = await setupWithConfig()
+    const { saveProjectConfig } = await import("../loadConfig.js")
+    saveProjectConfig.mockRejectedValueOnce(new Error("disk full"))
+    await plugin.saveConfigFile()
+    // Error toast should be shown
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "error" }),
+    )
+  })
+})
+
+// ── fireImmediate retry ──
+
+describe("fireImmediate retry", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    vi.spyOn(console, "error").mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it("retries when autoDrive returns false", async () => {
+    vi.useRealTimers()
+    const api = await setupWithConfig({ mode: "ai" })
+    // First call fails, second succeeds
+    api.client.session.prompt
+      .mockRejectedValueOnce(new Error("network error"))
+      .mockResolvedValueOnce(undefined)
+    await plugin.fireImmediate()
+    // prompt should have been called twice (first fail, retry success)
+    expect(api.client.session.prompt).toHaveBeenCalledTimes(2)
+  })
+
+  it("does nothing when not on a session route", async () => {
+    const api = await setupWithConfig({ mode: "ai" })
+    api.route.current = { name: "chat" }
+    await plugin.fireImmediate()
+    expect(api.client.session.prompt).not.toHaveBeenCalled()
   })
 })
 

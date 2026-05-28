@@ -54,5 +54,7 @@ export function buildMenuOptions(presets, sequences) {
             })),
         ]
       : []),
+    { title: "─".repeat(20), value: "__cfg_sep__", disabled: true, description: "" },
+    { title: "📋 查看配置", value: "__config__", description: "显示当前合并后的配置信息" },
   ]
 }
