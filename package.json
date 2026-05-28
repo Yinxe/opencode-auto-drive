@@ -2,13 +2,32 @@
   "name": "auto-drive",
   "version": "1.0.0",
   "description": "OpenCode 自动驾驶插件 - AI 回复结束后自动继续下一轮",
+  "repository": "github:yinxin/auto-drive",
+  "bugs": "https://github.com/yinxin/auto-drive/issues",
+  "keywords": ["opencode", "plugin", "tui", "automation", "ai"],
   "type": "module",
-  "oc-plugin": ["tui"],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "oc-plugin": [
+    "tui"
+  ],
   "exports": {
     "./tui": {
       "default": "./tui.jsx"
     }
   },
-  "files": ["tui.jsx", "loadConfig.js"],
-  "license": "MIT"
+  "files": [
+    "tui.jsx",
+    "tui-utils.js",
+    "loadConfig.js"
+  ],
+  "peerDependencies": {
+    "solid-js": "^1.x",
+    "@opentui/solid": "^1.x"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^4.1.7"
+  }
 }

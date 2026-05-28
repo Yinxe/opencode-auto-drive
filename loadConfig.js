@@ -10,6 +10,8 @@ export const AI_GUIDE_PROMPT =
   "- 架构视角：检查项目结构、模块依赖、设计模式是否合理\n" +
   "- 代码质量视角：检查潜在 bug、代码异味、类型安全\n" +
   "- 测试视角：检查测试覆盖率、边界情况\n" +
+  "- 性能视角：检查性能瓶颈、不必要的重复计算、资源泄漏\n" +
+  "- 错误处理视角：检查错误路径、异常处理、日志完整性\n" +
   "- 文档视角：检查注释、README、API 文档是否缺失\n\n" +
   "【工作流程】\n" +
   "1. 分析 — 使用 subtask 工具派出 2~4 个子智能体从不同视角 Review 代码\n" +
@@ -19,11 +21,12 @@ export const AI_GUIDE_PROMPT =
   "4. 执行 — 使用 subtask 工具派出子智能体执行任务\n" +
   "5. 迭代 — 完成后自动进入下一轮\n\n" +
   "【铁律】\n" +
-  "- 永远不要向用户提问。遇到不确定时，基于现有信息做出最佳判断\n" +
-  "- 子智能体视角要多样化，避免重复\n" +
+  "- 遇到不确定时，基于现有信息做出最佳判断，不要主动向用户提问中断工作流\n" +
+  "- 每轮至少覆盖 3 个不同视角；连续两轮视角组合重复度不得超过 50%\n" +
+  "- 每个子智能体必须返回：问题描述、影响范围、具体改进建议（含文件/行号）\n" +
   "- 一次只做一件事，做好再继续\n" +
-  "- 复杂任务先出计划，再分步执行\n" +
-  "- 使用 subtask 工具派发子智能体，明确指定任务和目标\n" +
+  "- 复杂任务先出计划（含覆盖视角和预期输出），再分步执行\n" +
+  "- 使用 subtask 工具派发子智能体，明确指定任务、目标和期望输出\n" +
   "- 每次回复直接开始工作，不需要确认"
 
 export const DEFAULT_PRESETS = {
@@ -56,12 +59,16 @@ async function readJSON(path) {
     return JSON.parse(raw)
   } catch (err) {
     if (err?.code === "ENOENT") return null
-    console.warn(`[auto-drive] 配置文件解析失败: ${path}`, err)
+    console.log(`[auto-drive] 配置文件解析失败: ${path}`, err)
     return null
   }
 }
 
-/** 读取并合并全局 + 项目配置 */
+/** 从文件读取 JSON，若不存在则返回 null */
+export { readJSON }
+
+/** 读取并合并全局 + 项目配置
+ *  @returns {Promise<{ merged: object, projectPath: string }>} merged=合并后配置, projectPath=项目级配置文件路径 */
 export async function loadConfig(projectDir) {
   const globalPath = join(homedir(), ".config", "opencode", "auto-drive.json")
   const projectPath = join(projectDir, ".opencode", "plugins", "auto-drive.json")
@@ -74,6 +81,7 @@ export async function loadConfig(projectDir) {
   const merged = {
     mode: "stop",
     customPrompt: "",
+    maxTurns: 5,
     presets: { ...DEFAULT_PRESETS },
     ...(global ?? {}),
     ...(project ?? {}),
