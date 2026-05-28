@@ -17,13 +17,13 @@ import {
  * OpenCode 自动驾驶插件
  *
  * 监听 session.idle，AI 回复结束后自动发送下一轮 prompt。
- * 支持停止 / 自定义 / AI 驱动 / 预设 / 序列五种模式。
+ * 支持停止 / 自定义 / AI + 多Agent / 预设 / 序列五种模式。
  *
  * 使用方式：
  *   /auto-drive 或 Ctrl+P → auto-drive → Enter    打开模式菜单
  *   ├─ ⏸ 停止
  *   ├─ ✏️ 自定义（弹窗输入提示词）
- *   ├─ 🤖 AI 驱动
+ *   ├─ 🤖 AI + 多Agent
  *   └─ 预设（"继续优化"、"修复 Bug"等）
  *
  *   Ctrl+Alt+A    快速切换启用/停止
@@ -93,7 +93,7 @@ const tui = async (api, options) => {
   registerMode("ai", {
     type: "ai",
     getPrompt: () => AI_GUIDE_PROMPT,
-    label: "AI 驱动",
+    label: "AI + 多Agent",
   })
 
   for (const [name, prompt] of Object.entries(config.presets ?? {})) {

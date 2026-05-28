@@ -19,7 +19,7 @@ function createModeMeta(overrides = {}) {
     getPrompt: () => config.customPrompt,
     label: "自定义",
   }
-  meta.ai = { type: "ai", getPrompt: () => AI_GUIDE_PROMPT, label: "AI 驱动" }
+  meta.ai = { type: "ai", getPrompt: () => AI_GUIDE_PROMPT, label: "AI + 多Agent" }
   meta["继续优化"] = {
     type: "preset",
     label: "继续优化",
@@ -142,9 +142,9 @@ describe("getCurrentPrompt", () => {
 // ── getTaskLabel ──
 
 describe("getTaskLabel", () => {
-  it('returns "AI 驱动" for ai mode', () => {
+  it('returns "AI + 多Agent" for ai mode', () => {
     const meta = createModeMeta()
-    expect(getTaskLabel(meta, null, "ai", null, new Map())).toBe("AI 驱动")
+    expect(getTaskLabel(meta, null, "ai", null, new Map())).toBe("AI + 多Agent")
   })
 
   it("returns truncated custom prompt for custom mode", () => {
