@@ -244,6 +244,32 @@ describe("autoDrive", () => {
     )
   })
 
+  it("toast shows correct step number for sequence mode", async () => {
+    const api = await setupWithConfig({
+      mode: "完整开发周期",
+      maxTurns: 5,
+      presets: {},
+      sequences: { "完整开发周期": ["分析", "修复", "测试", "文档"] },
+    })
+    globalThis.__lastApi = api
+    api.ui.toast.mockClear()
+
+    // First turn: no toast (current===0)
+    await plugin.autoDrive(makeEvent())
+    expect(api.ui.toast).not.toHaveBeenCalled()
+
+    // Second turn: toast shows step just completed → prevIdx+1 = 1 → "第2/4步"
+    await plugin.autoDrive(makeEvent())
+    const t1 = api.ui.toast.mock.calls[0][0].message
+    expect(t1).toContain("第2/4步")
+    expect(t1).toContain("完整开发周期")
+
+    // Third turn: prevIdx now 2 → "第3/4步"
+    api.ui.toast.mockClear()
+    await plugin.autoDrive(makeEvent())
+    expect(api.ui.toast.mock.calls[0][0].message).toContain("第3/4步")
+  })
+
   // ── 9. No sessionID → null ──
   it("returns null when event has no sessionID", async () => {
     await setupWithConfig({ mode: "ai" })
@@ -506,6 +532,21 @@ describe("fireImmediate retry", () => {
     await plugin.fireImmediate()
     // prompt should have been called twice (first fail, retry success)
     expect(api.client.session.prompt).toHaveBeenCalledTimes(2)
+  })
+
+  it("stops outer retry loop when autoDrive returns false (no duplicate toasts)", async () => {
+    vi.useRealTimers()
+    const api = await setupWithConfig({ mode: "ai" })
+    // All 3 inner attempts fail → autoDrive returns false
+    api.client.session.prompt.mockRejectedValue(new Error("persistent error"))
+    await plugin.fireImmediate()
+    // autoDrive inner retry = 3 attempts, fireImmediate should NOT add more
+    expect(api.client.session.prompt).toHaveBeenCalledTimes(3)
+    // Only 1 error toast (not 3 from outer retry)
+    const errorToasts = api.ui.toast.mock.calls.filter(
+      (c) => c[0]?.variant === "error",
+    )
+    expect(errorToasts).toHaveLength(1)
   })
 
   it("does nothing when not on a session route", async () => {

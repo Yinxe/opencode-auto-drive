@@ -235,4 +235,14 @@ describe("buildMenuOptions", () => {
     const entry = opts.find((o) => o.value === "空序列")
     expect(entry).toBeUndefined()
   })
+
+  it("includes config separator and entry at end", () => {
+    const opts = buildMenuOptions({}, {})
+    const last1 = opts[opts.length - 2]
+    const last2 = opts[opts.length - 1]
+    expect(last1.value).toBe("__cfg_sep__")
+    expect(last1.disabled).toBe(true)
+    expect(last2.value).toBe("__config__")
+    expect(last2.title).toContain("查看配置")
+  })
 })
