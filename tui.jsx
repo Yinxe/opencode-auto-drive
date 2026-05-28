@@ -206,16 +206,20 @@ const tui = async (api, options) => {
         // toast 使用步进前的索引（已完成的那一步）
         if (current > 0) {
           const seq = modeMeta[currentMode].sequence
-          api.ui.toast({
-            message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${currentMode} 第${prevIdx + 1}/${seq.length}步`,
-            variant: "info",
-          })
+          try {
+            api.ui.toast({
+              message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${currentMode} 第${prevIdx + 1}/${seq.length}步`,
+              variant: "info",
+            })
+          } catch {}
         }
       } else if (current > 0) {
-        api.ui.toast({
-          message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${getTaskLabel(modeMeta, config.customPrompt, currentMode, sessionID(), state.seqIndex)}`,
-          variant: "info",
-        })
+        try {
+          api.ui.toast({
+            message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${getTaskLabel(modeMeta, config.customPrompt, currentMode, sessionID(), state.seqIndex)}`,
+            variant: "info",
+          })
+        } catch {}
       }
       bumpTurnRev(prev => prev + 1)
       return true

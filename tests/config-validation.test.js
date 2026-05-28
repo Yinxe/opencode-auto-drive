@@ -165,6 +165,9 @@ describe("test exports", () => {
     expect(console.warn).toHaveBeenCalledWith(
       '[auto-drive] 预设名称 "stop" 与内置模式冲突，已忽略',
     )
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "warning" }),
+    )
   })
 
   it("warns and skips sequence whose name conflicts with built-in mode", async () => {
@@ -187,5 +190,20 @@ describe("test exports", () => {
     expect(console.warn).toHaveBeenCalledWith(
       '[auto-drive] 序列名称 "ai" 与内置模式冲突，已忽略',
     )
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "warning" }),
+    )
+  })
+
+  it("shows startup toast in non-test environment", async () => {
+    const origEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = "development"
+    const api = createMockApi()
+    await plugin.tui(api, {})
+    process.env.NODE_ENV = origEnv
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("Auto-Drive 已就绪") }),
+    )
+    api._cleanup()
   })
 })
