@@ -72,6 +72,16 @@ const tui = async (api, options) => {
     }
   }, 2000)
 
+  // 定期清理已关闭 session 的残留数据（防止内存泄漏）
+  const staleCleanup = setInterval(() => {
+    for (const sid of state.turns.keys()) {
+      if (!api.state.session.get(sid)) {
+        state.turns.delete(sid)
+        state.seqIndex.delete(sid)
+      }
+    }
+  }, 60000)
+
   /** 获取当前 session 的轮次（用于状态栏响应式显示） */
   function getSessionTurns() {
     turnRev() // 每次 autoDrive 递增，强制重渲染
@@ -469,6 +479,7 @@ const tui = async (api, options) => {
     unregCmd()
     unsubEvent()
     clearInterval(routePoll)
+    clearInterval(staleCleanup)
     state.turns.clear()
     state.seqIndex.clear()
   })

@@ -1,5 +1,5 @@
 {
-  "mode": "ai",
+  "mode": "stop",
   "maxTurns": 0,
   "customPrompt": "",
   "presets": {
