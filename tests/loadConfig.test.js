@@ -20,8 +20,8 @@ describe("constants", () => {
     expect(AI_GUIDE_PROMPT.length).toBeGreaterThan(100)
   })
 
-  it("DEFAULT_PRESETS has 5 entries", () => {
-    expect(Object.keys(DEFAULT_PRESETS)).toHaveLength(5)
+  it("DEFAULT_PRESETS has 6 entries", () => {
+    expect(Object.keys(DEFAULT_PRESETS)).toHaveLength(6)
     expect(DEFAULT_PRESETS["继续优化"]).toBeTruthy()
     expect(DEFAULT_PRESETS["修复 Bug"]).toBeTruthy()
     expect(DEFAULT_PRESETS["补充测试"]).toBeTruthy()
