@@ -198,12 +198,15 @@ describe("test exports", () => {
   it("shows startup toast in non-test environment", async () => {
     const origEnv = process.env.NODE_ENV
     process.env.NODE_ENV = "development"
-    const api = createMockApi()
-    await plugin.tui(api, {})
-    process.env.NODE_ENV = origEnv
-    expect(api.ui.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ message: expect.stringContaining("Auto-Drive 已就绪") }),
-    )
-    api._cleanup()
+    try {
+      const api = createMockApi()
+      await plugin.tui(api, {})
+      expect(api.ui.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining("Auto-Drive 已就绪") }),
+      )
+      api._cleanup()
+    } finally {
+      process.env.NODE_ENV = origEnv
+    }
   })
 })

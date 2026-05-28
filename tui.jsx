@@ -237,12 +237,12 @@ const tui = async (api, options) => {
   async function fireImmediate() {
     const route = api.route.current
     if (route.name !== "session") {
-      console.log(`[auto-drive] fireImmediate: 不在会话中, route=${route.name}`)
+      console.warn(`[auto-drive] fireImmediate: 不在会话中, route=${route.name}`)
       return
     }
     const sid = route.params.sessionID
     if (!sid) {
-      console.log("[auto-drive] fireImmediate: 无 sessionID")
+      console.warn("[auto-drive] fireImmediate: 无 sessionID")
       return
     }
     console.log(`[auto-drive] fireImmediate: session=${sid} mode=${mode()}`)

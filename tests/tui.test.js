@@ -225,6 +225,25 @@ describe("autoDrive", () => {
     )
   })
 
+  it("retries on transient error and succeeds on second attempt", async () => {
+    vi.useRealTimers()
+    vi.spyOn(console, "log").mockImplementation(() => {})
+    const api = await setupWithConfig({ mode: "ai" })
+    globalThis.__lastApi = api
+    // First call fails, second succeeds (inner retry handles this)
+    api.client.session.prompt
+      .mockRejectedValueOnce(new Error("network timeout"))
+      .mockResolvedValueOnce(undefined)
+
+    const result = await plugin.autoDrive(makeEvent())
+
+    expect(result).toBe(true)
+    expect(api.client.session.prompt).toHaveBeenCalledTimes(2)
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining("⏳ prompt 重试 1/2"),
+    )
+  })
+
   // ── 8. Toast after successful prompt (2nd turn onward) ──
   it("fires toast from the second turn", async () => {
     const api = await setupWithConfig({ mode: "ai", maxTurns: 3 })
