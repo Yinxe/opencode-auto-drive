@@ -9,6 +9,6 @@
       "default": "./tui.jsx"
     }
   },
-  "files": ["tui.jsx"],
+  "files": ["tui.jsx", "loadConfig.js"],
   "license": "MIT"
 }

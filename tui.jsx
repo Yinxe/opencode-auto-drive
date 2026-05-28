@@ -2,7 +2,6 @@
 import { createSignal, Show } from "solid-js"
 import {
   AI_GUIDE_PROMPT,
-  DEFAULT_PRESETS,
   PRESET_ICONS,
   loadConfig,
   saveProjectConfig,
@@ -50,12 +49,17 @@ const tui = async (api, options) => {
   const [lastMode, setLastMode] = createSignal(
     config.mode !== "stop" ? config.mode : null,
   )
+  const [sessionID, setSessionID] = createSignal(
+    api.route.current.name === "session"
+      ? api.route.current.params.sessionID
+      : null,
+  )
 
-  /** 获取当前 session 的轮次（用于状态栏显示） */
+  /** 获取当前 session 的轮次（用于状态栏响应式显示） */
   function getSessionTurns() {
-    const route = api.route.current
-    if (route.name !== "session") return 0
-    return state.turns.get(route.params.sessionID) ?? 0
+    const sid = sessionID()
+    if (!sid) return 0
+    return state.turns.get(sid) ?? 0
   }
 
   /** 获取当前模式的 prompt 文本 */
@@ -76,16 +80,17 @@ const tui = async (api, options) => {
     const currentMode = mode()
     if (!isActive(currentMode)) return
 
-    const { sessionID } = event.properties
-    if (!sessionID) return
+    const { sessionID: sid } = event.properties
+    if (!sid) return
+    setSessionID(sid)
 
-    const current = state.turns.get(sessionID) ?? 0
+    const current = state.turns.get(sid) ?? 0
     if (current >= state.maxTurns) return
 
     const prompt = getPromptText(currentMode)
     if (!prompt) return
 
-    state.turns.set(sessionID, current + 1)
+    state.turns.set(sid, current + 1)
 
     try {
       const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
@@ -93,7 +98,7 @@ const tui = async (api, options) => {
         `[auto-drive] 🚀 ${current + 1}/${state.maxTurns} ${label}`,
       )
       await api.client.session.prompt({
-        sessionID,
+        sessionID: sid,
         parts: [{ type: "text", text: prompt }],
       })
     } catch (err) {
