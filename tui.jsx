@@ -15,6 +15,13 @@ const DEFAULT_PRESETS = {
   "添加文档": "为当前代码添加中文文档注释",
 }
 
+const PRESET_ICONS = {
+  "继续优化": "📋",
+  "修复 Bug": "🐛",
+  "补充测试": "🧪",
+  "添加文档": "📝",
+}
+
 /**
  * OpenCode 自动驾驶插件
  *
@@ -64,6 +71,13 @@ async function loadConfig(projectDir) {
     ...(project ?? {}),
   }
 
+  // 深合并 presets（避免 project 配置浅覆盖整个预设集合）
+  merged.presets = {
+    ...DEFAULT_PRESETS,
+    ...(global?.presets ?? {}),
+    ...(project?.presets ?? {}),
+  }
+
   return { merged, projectPath }
 }
 
@@ -93,6 +107,9 @@ const tui = async (api, options) => {
   // ── Solid 信号 ──
   const [mode, setMode] = createSignal(config.mode)
   const [turnCount, setTurnCount] = createSignal(0)
+  const [lastMode, setLastMode] = createSignal(
+    config.mode !== "stop" ? config.mode : null,
+  )
 
   /** 获取当前模式的 prompt 文本 */
   function getPromptText(currentMode) {
@@ -164,34 +181,27 @@ const tui = async (api, options) => {
         value: "ai",
         description: "AI 自主决定下一步方向",
       },
+      {
+        title: "─".repeat(20),
+        value: "__sep__",
+        disabled: true,
+        description: "",
+      },
       ...Object.entries(config.presets).map(([name, desc]) => ({
-        title: `📋 ${name}`,
+        title: `${PRESET_ICONS[name] ?? "📋"} ${name}`,
         value: name,
         description: desc,
       })),
     ]
   }
 
-  /** 对当前会话立即执行一次自动驾驶 */
-  async function fireImmediate() {
+  /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
+  function fireImmediate() {
     const route = api.route.current
     if (route.name !== "session") return
     const sessionID = route.params.sessionID
     if (!sessionID) return
-
-    const currentMode = mode()
-    const promptText = getPromptText(currentMode)
-    if (!promptText) return
-
-    console.warn(`[auto-drive] 🚀 立即执行 "${currentMode}"`)
-    try {
-      await api.client.session.prompt({
-        sessionID,
-        parts: [{ type: "text", text: promptText }],
-      })
-    } catch (err) {
-      console.error("[auto-drive] ❌", err instanceof Error ? err.message : err)
-    }
+    autoDrive({ properties: { sessionID } })
   }
 
   /** 显示模式选择菜单 */
@@ -205,12 +215,14 @@ const tui = async (api, options) => {
         current={mode()}
         onSelect={(option) => {
           api.ui.dialog.clear()
+          if (option.value === "__sep__") return
           if (option.value === "custom") {
             showCustomPrompt()
             return
           }
           setMode(option.value)
           config.mode = option.value
+          if (option.value !== "stop") setLastMode(option.value)
           saveConfigFile()
           fireImmediate()
         }}
@@ -233,6 +245,7 @@ const tui = async (api, options) => {
           config.customPrompt = value.trim()
           setMode("custom")
           config.mode = "custom"
+          setLastMode("custom")
           saveConfigFile()
           fireImmediate()
         }}
@@ -280,23 +293,30 @@ const tui = async (api, options) => {
 
         return (
           <box flexDirection="row" paddingLeft={1} paddingRight={1}>
-            <Show when={!isActive(currentMode)}>
-              <text fg={theme.textMuted}>⏸ AD</text>
-            </Show>
-            <Show when={currentMode === "ai"}>
+            <Show
+              when={isActive(currentMode)}
+              fallback={
+                <text fg={theme.textMuted}>
+                  ⏸ AD{lastMode() ? ` [${lastMode()}]` : ""}
+                </text>
+              }
+            >
               <text fg={theme.primary}>🚀 AD</text>
-              <text fg={theme.text}> 🤖</text>
-            </Show>
-            <Show when={currentMode === "custom"}>
-              <text fg={theme.primary}>🚀 AD</text>
-              <text fg={theme.textMuted}> "</text>
-              <text fg={theme.text}>{config.customPrompt.slice(0, 40)}</text>
-              <text fg={theme.textMuted}>"</text>
-            </Show>
-            <Show when={currentMode !== "stop" && currentMode !== "ai" && currentMode !== "custom"}>
-              <text fg={theme.primary}>🚀 AD</text>
-              <text fg={theme.textMuted}> </text>
-              <text fg={theme.text}>{currentMode}</text>
+
+              <Show when={currentMode === "ai"}>
+                <text fg={theme.text}> 🤖</text>
+              </Show>
+              <Show when={currentMode === "custom"}>
+                <text fg={theme.textMuted}> "</text>
+                <text fg={theme.text}>{config.customPrompt.slice(0, 30)}</text>
+                <text fg={theme.textMuted}>"</text>
+              </Show>
+              <Show when={currentMode !== "ai" && currentMode !== "custom"}>
+                <text fg={theme.textMuted}> </text>
+                <text fg={theme.text}>{currentMode}</text>
+              </Show>
+
+              <text fg={theme.textMuted}> {turnCount()}/{state.maxTurns}</text>
             </Show>
           </box>
         )

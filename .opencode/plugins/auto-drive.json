@@ -1,5 +1,5 @@
 {
-  "mode": "stop",
+  "mode": "ai",
   "customPrompt": "",
   "presets": {
     "继续优化": "继续优化当前功能，添加必要的注释和类型完善",
