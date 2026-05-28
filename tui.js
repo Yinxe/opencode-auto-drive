@@ -80,6 +80,18 @@ const tui = async (api, options) => {
   // ── 监听会话空闲 ──
   const unsubEvent = api.event.on("session.idle", autoDrive)
 
+  // ── 底部状态栏 ──
+  api.slots.register({
+    order: 100,
+    slots: {
+      app_bottom() {
+        if (!state.enabled) return "⏸ auto-drive"
+        const total = Array.from(state.turns.values()).reduce((a, b) => a + b, 0)
+        return `🚀 auto-drive ${total}/${state.maxTurns}`
+      },
+    },
+  })
+
   // ── 清理 ──
   api.lifecycle.onDispose(() => {
     unregCmd()
