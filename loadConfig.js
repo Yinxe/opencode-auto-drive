@@ -85,7 +85,6 @@ export async function loadConfig(projectDir) {
     mode: "stop",
     customPrompt: "",
     maxTurns: 5,
-    presets: { ...DEFAULT_PRESETS },
     ...(global ?? {}),
     ...(project ?? {}),
   }

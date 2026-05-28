@@ -524,7 +524,7 @@ const tui = async (api, options) => {
   // ── 启动通知（测试环境下不显示避免干扰断言） ──
   if (typeof process === "undefined" || process.env?.NODE_ENV !== "test") {
     try {
-      api.ui.toast({ message: `🚀 Auto-Drive 已就绪 (${mode() === "stop" ? "⏸ 已停止" : `🚀 ${mode()}`}) — /auto-drive 打开菜单`, variant: "info" })
+      api.ui.toast({ message: `Auto-Drive 已就绪 (${mode() === "stop" ? "⏸ 已停止" : `🚀 ${mode()}`}) — /auto-drive 打开菜单`, variant: "info" })
     } catch {}
   }
 
