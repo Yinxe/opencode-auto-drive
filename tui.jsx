@@ -1,3 +1,6 @@
+/** @jsxImportSource @opentui/solid */
+import { createSignal } from "solid-js"
+
 /**
  * OpenCode 自动驾驶插件
  *
@@ -23,6 +26,8 @@ const tui = async (api, options) => {
     turns: new Map(),
   }
 
+  const [rev, bump] = createSignal(0)
+
   /** 向会话发送下一轮提示词 */
   async function autoDrive(event) {
     if (!state.enabled) return
@@ -34,6 +39,7 @@ const tui = async (api, options) => {
     if (current >= state.maxTurns) return
 
     state.turns.set(sessionID, current + 1)
+    bump()
 
     try {
       console.warn(
@@ -55,6 +61,7 @@ const tui = async (api, options) => {
   function toggle() {
     state.enabled = !state.enabled
     if (!state.enabled) state.turns.clear()
+    bump()
     api.ui.toast({
       message: state.enabled
         ? "🚀 自动驾驶已启用"
@@ -80,14 +87,31 @@ const tui = async (api, options) => {
   // ── 监听会话空闲 ──
   const unsubEvent = api.event.on("session.idle", autoDrive)
 
-  // ── 底部状态栏 ──
+  // ── 底部状态栏（app_bottom 插槽） ──
   api.slots.register({
     order: 100,
     slots: {
-      app_bottom() {
-        if (!state.enabled) return "⏸ auto-drive"
-        const total = Array.from(state.turns.values()).reduce((a, b) => a + b, 0)
-        return `🚀 auto-drive ${total}/${state.maxTurns}`
+      app_bottom(ctx) {
+        rev() // 追踪信号，状态变更时自动重渲染
+        if (!state.enabled) {
+          return (
+            <box paddingLeft={1} paddingRight={1}>
+              <text fg={ctx.theme.current.textMuted}>⏸ auto-drive</text>
+            </box>
+          )
+        }
+        const total = Array.from(state.turns.values()).reduce(
+          (a, b) => a + b,
+          0,
+        )
+        return (
+          <box paddingLeft={1} paddingRight={1}>
+            <text fg={ctx.theme.current.primary}>🚀 auto-drive</text>
+            <text fg={ctx.theme.current.text}>
+              {" "}{total}/{state.maxTurns}
+            </text>
+          </box>
+        )
       },
     },
   })

@@ -6,9 +6,9 @@
   "oc-plugin": ["tui"],
   "exports": {
     "./tui": {
-      "default": "./tui.js"
+      "default": "./tui.jsx"
     }
   },
-  "files": ["tui.js"],
+  "files": ["tui.jsx"],
   "license": "MIT"
 }
