@@ -37,12 +37,15 @@ const tui = async (api, options) => {
   if (options?.mode !== undefined) config.mode = options.mode
   if (options?.customPrompt !== undefined) config.customPrompt = options.customPrompt
   if (options?.presets) config.presets = { ...config.presets, ...options.presets }
+  if (options?.sequences) config.sequences = { ...config.sequences, ...options.sequences }
 
   const maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
 
   const state = {
     /** sessionID -> 已自动轮数 */
     turns: new Map(),
+    /** sessionID -> 序列当前步进 */
+    seqIndex: new Map(),
   }
 
   // ── Solid 信号 ──
@@ -77,12 +80,25 @@ const tui = async (api, options) => {
     return state.turns.get(sid) ?? 0
   }
 
-  /** 获取当前模式的 prompt 文本 */
+  /** 获取当前模式的 prompt 文本（用于判断是否活跃） */
   function getPromptText(currentMode) {
     if (currentMode === "ai") return AI_GUIDE_PROMPT
     if (currentMode === "custom") return config.customPrompt
     if (config.presets[currentMode]) return config.presets[currentMode]
+    if (config.sequences?.[currentMode]) return config.sequences[currentMode][0]
     return null
+  }
+
+  /** 获取当前轮实际发送的 prompt（序列模式取当前步进） */
+  function getCurrentPrompt(currentMode) {
+    if (config.sequences?.[currentMode]) {
+      const sid = sessionID()
+      if (!sid) return getPromptText(currentMode)
+      const idx = state.seqIndex.get(sid) ?? 0
+      const seq = config.sequences[currentMode]
+      return seq[idx % seq.length]
+    }
+    return getPromptText(currentMode)
   }
 
   /** 根据 mode 判断是否活跃 */
@@ -94,6 +110,11 @@ const tui = async (api, options) => {
   function getTaskLabel(currentMode) {
     if (currentMode === "ai") return "AI 驱动"
     if (currentMode === "custom") return config.customPrompt.slice(0, 20)
+    if (config.sequences?.[currentMode]) {
+      const sid = sessionID()
+      const idx = sid ? (state.seqIndex.get(sid) ?? 0) : 0
+      return `${currentMode} 第${idx + 1}/${config.sequences[currentMode].length}步`
+    }
     return currentMode
   }
 
@@ -120,7 +141,7 @@ const tui = async (api, options) => {
 
     if (limit > 0 && current >= limit) return
 
-    const prompt = getPromptText(currentMode)
+    const prompt = getCurrentPrompt(currentMode)
     if (!prompt) return
 
     try {
@@ -129,14 +150,16 @@ const tui = async (api, options) => {
       console.warn(
         `[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`,
       )
-
       await api.client.session.prompt({
         sessionID: sid,
         parts: [{ type: "text", text: prompt }],
       })
 
-      // 发送成功后才计轮次
+      // 发送成功后才计轮次和序列步进
       state.turns.set(sid, current + 1)
+      if (config.sequences?.[currentMode]) {
+        state.seqIndex.set(sid, (state.seqIndex.get(sid) ?? 0) + 1)
+      }
       bumpTurnRev()
     } catch (err) {
       console.error(
@@ -166,6 +189,9 @@ const tui = async (api, options) => {
       maxTurns: maxTurns(),
       customPrompt: config.customPrompt,
       presets: config.presets,
+    }
+    if (config.sequences && Object.keys(config.sequences).length > 0) {
+      data.sequences = config.sequences
     }
     await saveProjectConfig(projectPath, data).catch((err) => {
       console.error("[auto-drive] 配置保存失败:", err)
@@ -229,6 +255,21 @@ const tui = async (api, options) => {
         value: name,
         description: desc,
       })),
+      ...(config.sequences && Object.keys(config.sequences).length > 0
+        ? [
+            {
+              title: "─".repeat(20),
+              value: "__seq_sep__",
+              disabled: true,
+              description: "",
+            },
+            ...Object.entries(config.sequences).map(([name, seq]) => ({
+              title: `🔄 ${name}`,
+              value: name,
+              description: `${seq.length} 步循环`,
+            })),
+          ]
+        : []),
     ]
   }
 
@@ -303,7 +344,7 @@ const tui = async (api, options) => {
         options={buildMenuOptions()}
         current={mode()}
         onSelect={(option) => {
-          if (option.value === "__sep__") {
+          if (option.value === "__sep__" || option.value === "__seq_sep__") {
             api.ui.dialog.clear()
             return
           }
@@ -383,6 +424,9 @@ const tui = async (api, options) => {
         const sessionTurns = getSessionTurns()
         const limit = maxTurns()
         const limitLabel = limit > 0 ? limit : "∞"
+        const isSeq = config.sequences?.[currentMode]
+        const seqIdx = isSeq ? (sessionID() ? (state.seqIndex.get(sessionID()) ?? 0) : 0) : 0
+        const seqLen = isSeq ? config.sequences[currentMode].length : 0
 
         return (
           <box flexDirection="row" paddingLeft={1} paddingRight={1}>
@@ -409,6 +453,9 @@ const tui = async (api, options) => {
                 <text fg={theme.text}>{currentMode}</text>
               </Show>
 
+              <Show when={isSeq}>
+                <text fg={theme.textMuted}> 第{seqIdx + 1}/{seqLen}步</text>
+              </Show>
               <text fg={theme.textMuted}> {sessionTurns}/{limitLabel}</text>
             </Show>
           </box>
@@ -423,6 +470,7 @@ const tui = async (api, options) => {
     unsubEvent()
     clearInterval(routePoll)
     state.turns.clear()
+    state.seqIndex.clear()
   })
 }
 

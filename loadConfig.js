@@ -39,6 +39,15 @@ export const PRESET_ICONS = {
   "添加文档": "📝",
 }
 
+export const DEFAULT_SEQUENCES = {
+  "完整开发周期": [
+    "分析当前项目的代码结构和潜在问题",
+    "修复第一步发现的问题",
+    "为修改的代码补充单元测试",
+    "为新增代码添加中文文档注释",
+  ],
+}
+
 /** 从文件读取 JSON，若不存在则返回 null */
 async function readJSON(path) {
   try {
@@ -74,6 +83,13 @@ export async function loadConfig(projectDir) {
     ...DEFAULT_PRESETS,
     ...(global?.presets ?? {}),
     ...(project?.presets ?? {}),
+  }
+
+  // 深合并 sequences
+  merged.sequences = {
+    ...DEFAULT_SEQUENCES,
+    ...(global?.sequences ?? {}),
+    ...(project?.sequences ?? {}),
   }
 
   return { merged, projectPath }
