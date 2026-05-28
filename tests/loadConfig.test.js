@@ -18,12 +18,12 @@ describe("constants", () => {
     expect(AI_GUIDE_PROMPT.length).toBeGreaterThan(100)
   })
 
-  it("DEFAULT_PRESETS has 6 entries", () => {
-    expect(Object.keys(DEFAULT_PRESETS)).toHaveLength(6)
-    expect(DEFAULT_PRESETS["继续优化"]).toBeTruthy()
-    expect(DEFAULT_PRESETS["修复 Bug"]).toBeTruthy()
-    expect(DEFAULT_PRESETS["补充测试"]).toBeTruthy()
-    expect(DEFAULT_PRESETS["添加文档"]).toBeTruthy()
+  it("DEFAULT_PRESETS has 4 entries", () => {
+    expect(Object.keys(DEFAULT_PRESETS)).toHaveLength(4)
+    expect(typeof DEFAULT_PRESETS["智能迭代"]).toBe("string")
+    expect(typeof DEFAULT_PRESETS["功能优先"]).toBe("string")
+    expect(typeof DEFAULT_PRESETS["维护优先"]).toBe("string")
+    expect(typeof DEFAULT_PRESETS["自定义"]).toBe("string")
   })
 
   it("PRESET_ICONS has icons for all presets", () => {
@@ -32,9 +32,9 @@ describe("constants", () => {
     }
   })
 
-  it("DEFAULT_SEQUENCES has 完整开发周期", () => {
-    expect(DEFAULT_SEQUENCES["完整开发周期"]).toBeInstanceOf(Array)
-    expect(DEFAULT_SEQUENCES["完整开发周期"]).toHaveLength(4)
+  it("DEFAULT_SEQUENCES has 迭代周期", () => {
+    expect(DEFAULT_SEQUENCES["迭代周期"]).toBeInstanceOf(Array)
+    expect(DEFAULT_SEQUENCES["迭代周期"]).toHaveLength(4)
   })
 })
 
@@ -99,7 +99,7 @@ describe("loadConfig", () => {
       expect(merged.mode).toBe("custom")
       expect(merged.customPrompt).toBe("项目特定提示词")
       // presets should be deep-merged: defaults + global + project
-      expect(merged.presets["继续优化"]).toBeTruthy() // from defaults
+      expect(typeof merged.presets["智能迭代"]).toBe("string") // from defaults
       expect(merged.presets["全局预设"]).toBe("全局") // from global
       expect(merged.presets["项目预设"]).toBe("项目") // from project
       // maxTurns from global still applies (project doesn't override)
