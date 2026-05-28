@@ -170,31 +170,6 @@ describe("test exports", () => {
     )
   })
 
-  it("warns and skips sequence whose name conflicts with built-in mode", async () => {
-    const { loadConfig } = await import("../loadConfig.js")
-    vi.mocked(loadConfig).mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: 5,
-        presets: {},
-        sequences: { ai: ["step1"] },
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    })
-
-    const api = createMockApi()
-    await plugin.tui(api, {})
-    globalThis.__lastApi = api
-
-    expect(console.warn).toHaveBeenCalledWith(
-      '[auto-drive] 序列名称 "ai" 与内置模式冲突，已忽略',
-    )
-    expect(api.ui.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "warning" }),
-    )
-  })
-
   it("shows startup toast in non-test environment", async () => {
     const origEnv = process.env.NODE_ENV
     process.env.NODE_ENV = "development"

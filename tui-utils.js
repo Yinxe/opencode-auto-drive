@@ -31,7 +31,7 @@ export function getTaskLabel(modeMeta, customPrompt, currentMode, sessionID, seq
 }
 
 /** 构建模式选择菜单选项 */
-export function buildMenuOptions(presets, sequences) {
+export function buildMenuOptions(presets) {
   return [
     { title: "⏸ 停止", value: "stop", description: "关闭自动驾驶" },
     { title: "✏️ 自定义", value: "custom", description: "输入自定义提示词" },
@@ -42,18 +42,6 @@ export function buildMenuOptions(presets, sequences) {
       value: name,
       description: PRESET_DESC[name] ?? (prompt ? prompt.slice(0, 60) + "…" : ""),
     })),
-    ...(sequences && Object.keys(sequences).length > 0
-      ? [
-          { title: "─".repeat(20), value: "__seq_sep__", disabled: true, description: "" },
-          ...Object.entries(sequences)
-            .filter(([, seq]) => seq.length > 0)
-            .map(([name, seq]) => ({
-              title: `🔄 ${name}`,
-              value: name,
-              description: `${seq.length} 步循环`,
-            })),
-        ]
-      : []),
     { title: "─".repeat(20), value: "__cfg_sep__", disabled: true, description: "" },
     { title: "📋 查看配置", value: "__config__", description: "显示当前合并后的配置信息" },
   ]

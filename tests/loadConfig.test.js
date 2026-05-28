@@ -3,7 +3,6 @@ import {
   AI_GUIDE_PROMPT,
   DEFAULT_PRESETS,
   PRESET_ICONS,
-  DEFAULT_SEQUENCES,
 } from "../prompts.js"
 import { loadConfig, saveProjectConfig, readJSON } from "../loadConfig.js"
 import { mkdir, writeFile, unlink, rmdir, readdir } from "fs/promises"
@@ -31,11 +30,6 @@ describe("constants", () => {
       expect(PRESET_ICONS[name]).toBeTruthy()
     }
   })
-
-  it("DEFAULT_SEQUENCES has 迭代周期", () => {
-    expect(DEFAULT_SEQUENCES["迭代周期"]).toBeInstanceOf(Array)
-    expect(DEFAULT_SEQUENCES["迭代周期"]).toHaveLength(4)
-  })
 })
 
 // ── loadConfig ──
@@ -46,7 +40,6 @@ describe("loadConfig", () => {
   beforeEach(async () => {
     tmpDir = join(tmpdir(), `auto-drive-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     await mkdir(tmpDir, { recursive: true })
-    // Create .opencode/plugins/ directory
     await mkdir(join(tmpDir, ".opencode", "plugins"), { recursive: true })
   })
 
@@ -58,7 +51,6 @@ describe("loadConfig", () => {
   })
 
   it("returns defaults when no config files exist", async () => {
-    // Prevent reading global config by setting HOME to tmpDir
     const origHome = process.env.HOME
     process.env.HOME = tmpDir
     try {
@@ -66,7 +58,6 @@ describe("loadConfig", () => {
       expect(merged.mode).toBe("stop")
       expect(merged.customPrompt).toBe("")
       expect(merged.presets).toEqual(DEFAULT_PRESETS)
-      expect(merged.sequences).toEqual(DEFAULT_SEQUENCES)
     } finally {
       process.env.HOME = origHome
     }
@@ -76,37 +67,21 @@ describe("loadConfig", () => {
     const origHome = process.env.HOME
     process.env.HOME = tmpDir
     try {
-      // Write global config
       const globalDir = join(tmpDir, ".config", "opencode")
       await mkdir(globalDir, { recursive: true })
-      await writeFile(
-        join(globalDir, "auto-drive.json"),
-        JSON.stringify({ mode: "ai", maxTurns: 10, presets: { "全局预设": "全局" } }),
-      )
-
-      // Write project config
-      await writeFile(
-        join(tmpDir, ".opencode", "plugins", "auto-drive.json"),
-        JSON.stringify({
-          mode: "custom",
-          customPrompt: "项目特定提示词",
-          presets: { "项目预设": "项目" },
-        }),
-      )
-
+      await writeFile(join(globalDir, "auto-drive.json"),
+        JSON.stringify({ mode: "ai", maxTurns: 10, presets: { "全局预设": "全局" } }))
+      await writeFile(join(tmpDir, ".opencode", "plugins", "auto-drive.json"),
+        JSON.stringify({ mode: "custom", customPrompt: "项目特定提示词", presets: { "项目预设": "项目" } }))
       const { merged } = await loadConfig(tmpDir)
-      // project mode overrides global
       expect(merged.mode).toBe("custom")
       expect(merged.customPrompt).toBe("项目特定提示词")
-      // presets should be deep-merged: defaults + global + project
-      expect(typeof merged.presets["智能迭代"]).toBe("string") // from defaults
-      expect(merged.presets["全局预设"]).toBe("全局") // from global
-      expect(merged.presets["项目预设"]).toBe("项目") // from project
-      // maxTurns from global still applies (project doesn't override)
+      expect(typeof merged.presets["智能迭代"]).toBe("string")
+      expect(merged.presets["全局预设"]).toBe("全局")
+      expect(merged.presets["项目预设"]).toBe("项目")
       expect(merged.maxTurns).toBe(10)
     } finally {
       process.env.HOME = origHome
-      // Cleanup global config
       await unlink(join(tmpDir, ".config", "opencode", "auto-drive.json")).catch(() => {})
       await rmdir(join(tmpDir, ".config", "opencode")).catch(() => {})
       await rmdir(join(tmpDir, ".config")).catch(() => {})
@@ -155,7 +130,6 @@ describe("saveProjectConfig", () => {
     const { readFile } = await import("fs/promises")
     const content = await readFile(deepPath, "utf-8")
     expect(JSON.parse(content)).toEqual({ test: true })
-    // Cleanup
     await unlink(deepPath).catch(() => {})
     await rmdir(join(tmpDir, "a", "b", "c")).catch(() => {})
     await rmdir(join(tmpDir, "a", "b")).catch(() => {})
@@ -169,10 +143,7 @@ describe("readJSON", () => {
   let tmpDir, testPath
 
   beforeEach(async () => {
-    tmpDir = join(
-      tmpdir(),
-      `auto-drive-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    )
+    tmpDir = join(tmpdir(), `auto-drive-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
     await mkdir(tmpDir, { recursive: true })
     testPath = join(tmpDir, "test.json")
   })
@@ -194,11 +165,10 @@ describe("readJSON", () => {
   })
 
   it("returns null and logs warning for malformed JSON", async () => {
-    await writeFile(testPath, "{ mode: ai }") // invalid JSON (unquoted keys)
+    await writeFile(testPath, "{ mode: ai }")
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const result = await readJSON(testPath)
     expect(result).toBeNull()
-    // Should log a warning about parse failure
     expect(warnSpy).toHaveBeenCalled()
     warnSpy.mockRestore()
   })

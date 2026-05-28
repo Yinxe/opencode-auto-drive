@@ -45,7 +45,6 @@ const tui = async (api, options) => {
   if (options?.mode !== undefined) config.mode = options.mode
   if (options?.customPrompt !== undefined) config.customPrompt = options.customPrompt
   if (options?.presets) config.presets = { ...config.presets, ...options.presets }
-  if (options?.sequences) config.sequences = { ...config.sequences, ...options.sequences }
 
   let maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
   // 校验 maxTurns：必须是 >=0 的数字
@@ -105,19 +104,6 @@ const tui = async (api, options) => {
       continue
     }
     registerMode(name, { type: "preset", label: name, getPrompt: () => prompt })
-  }
-  for (const [name, seq] of Object.entries(config.sequences ?? {})) {
-    if (modeMeta[name]) {
-      console.warn(`[auto-drive] 序列名称 "${name}" 与内置模式冲突，已忽略`)
-      try { api.ui.toast({ message: `⚠️ 序列 "${name}" 与内置模式冲突，已忽略`, variant: "warning" }) } catch {}
-      continue
-    }
-    registerMode(name, {
-      type: "sequence",
-      label: name,
-      getPrompt: () => seq[0],
-      sequence: seq,
-    })
   }
 
   // 轮询检测路由变更，更新 sessionID 信号
@@ -263,9 +249,6 @@ const tui = async (api, options) => {
       customPrompt: config.customPrompt,
       presets: config.presets,
     }
-    if (config.sequences && Object.keys(config.sequences).length > 0) {
-      data.sequences = config.sequences
-    }
     // 写回时自动删除 undefined 字段
     for (const k of Object.keys(data)) {
       if (data[k] === undefined) delete data[k]
@@ -373,7 +356,7 @@ const tui = async (api, options) => {
     api.ui.dialog.replace(() => (
       <DialogSelect
         title="Auto-Drive 自动驾驶"
-        options={buildMenuOptions(config.presets, config.sequences)}
+        options={buildMenuOptions(config.presets)}
         current={mode()}
         onSelect={(option) => {
           if (option.disabled) {
@@ -440,11 +423,6 @@ const tui = async (api, options) => {
       `预设 (${Object.keys(config.presets ?? {}).length}):`,
       ...Object.entries(config.presets ?? {}).map(
         ([k, v]) => `  ${k}: "${String(v).slice(0, 60)}"`,
-      ),
-      ``,
-      `序列 (${Object.keys(config.sequences ?? {}).length}):`,
-      ...Object.entries(config.sequences ?? {}).map(
-        ([k, v]) => `  ${k}: ${Array.isArray(v) ? `${v.length} 步循环` : "?"}`,
       ),
       ``,
       `配置优先级: 全局 → 项目 → 插件选项`,

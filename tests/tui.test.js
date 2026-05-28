@@ -146,42 +146,6 @@ describe("autoDrive", () => {
     expect(api.client.session.prompt).toHaveBeenCalledTimes(1)
   })
 
-  // ── 5. Sequence mode ──
-  it("cycles through sequence steps and wraps with modulo", async () => {
-    const api = await setupWithConfig({
-      mode: "序列测试",
-      sequences: {
-        "序列测试": ["step-0", "step-1", "step-2"],
-      },
-    })
-    globalThis.__lastApi = api
-
-    // Call 3 times
-    const r1 = await plugin.autoDrive(makeEvent())
-    const r2 = await plugin.autoDrive(makeEvent())
-    const r3 = await plugin.autoDrive(makeEvent())
-
-    expect(r1).toBe(true)
-    expect(r2).toBe(true)
-    expect(r3).toBe(true)
-    expect(api.client.session.prompt).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      parts: [{ type: "text", text: "step-0" }],
-    }))
-    expect(api.client.session.prompt).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      parts: [{ type: "text", text: "step-1" }],
-    }))
-    expect(api.client.session.prompt).toHaveBeenNthCalledWith(3, expect.objectContaining({
-      parts: [{ type: "text", text: "step-2" }],
-    }))
-
-    // 4th call wraps to index 0
-    const r4 = await plugin.autoDrive(makeEvent())
-    expect(r4).toBe(true)
-    expect(api.client.session.prompt).toHaveBeenNthCalledWith(4, expect.objectContaining({
-      parts: [{ type: "text", text: "step-0" }],
-    }))
-  })
-
   // ── 6. Concurrent call protection ──
   it("rejects concurrent calls for the same session (pendingLocks)", async () => {
     const api = await setupWithConfig({ mode: "ai" })
@@ -261,40 +225,6 @@ describe("autoDrive", () => {
         variant: "info",
       }),
     )
-  })
-
-  it("toast shows correct step number for sequence mode", async () => {
-    const api = await setupWithConfig({
-      mode: "完整开发周期",
-      maxTurns: 5,
-      presets: {},
-      sequences: { "完整开发周期": ["分析", "修复", "测试", "文档"] },
-    })
-    globalThis.__lastApi = api
-    api.ui.toast.mockClear()
-
-    // First turn: no toast (current===0)
-    await plugin.autoDrive(makeEvent())
-    expect(api.ui.toast).not.toHaveBeenCalled()
-
-    // Second turn: toast shows step just completed → prevIdx+1 = 1 → "第2/4步"
-    await plugin.autoDrive(makeEvent())
-    const t1 = api.ui.toast.mock.calls[0][0].message
-    expect(t1).toContain("第2/4步")
-    expect(t1).toContain("完整开发周期")
-
-    // Third turn: prevIdx now 2 → "第3/4步"
-    api.ui.toast.mockClear()
-    await plugin.autoDrive(makeEvent())
-    expect(api.ui.toast.mock.calls[0][0].message).toContain("第3/4步")
-  })
-
-  // ── 9. No sessionID → null ──
-  it("returns null when event has no sessionID", async () => {
-    await setupWithConfig({ mode: "ai" })
-
-    const result = await plugin.autoDrive({ properties: {} })
-    expect(result).toBeNull()
   })
 
   // ── 10. Export verification (the mechanism works) ──

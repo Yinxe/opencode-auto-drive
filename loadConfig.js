@@ -2,7 +2,7 @@ import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
 import { join, dirname } from "path"
 
-import { DEFAULT_PRESETS, DEFAULT_SEQUENCES } from "./prompts.js"
+import { DEFAULT_PRESETS } from "./prompts.js"
 
 /** 从文件读取 JSON，若不存在则返回 null */
 async function readJSON(path) {
@@ -43,13 +43,6 @@ export async function loadConfig(projectDir) {
     ...DEFAULT_PRESETS,
     ...(global?.presets ?? {}),
     ...(project?.presets ?? {}),
-  }
-
-  // 深合并 sequences
-  merged.sequences = {
-    ...DEFAULT_SEQUENCES,
-    ...(global?.sequences ?? {}),
-    ...(project?.sequences ?? {}),
   }
 
   return { merged, projectPath }

@@ -20,16 +20,10 @@ function createModeMeta(overrides = {}) {
     label: "自定义",
   }
   meta.ai = { type: "ai", getPrompt: () => AI_GUIDE_PROMPT, label: "AI + 多Agent" }
-  meta["继续优化"] = {
+  meta["智能迭代"] = {
     type: "preset",
-    label: "继续优化",
-    getPrompt: () => "继续优化当前功能",
-  }
-  meta["完整开发周期"] = {
-    type: "sequence",
-    label: "完整开发周期",
-    getPrompt: () => "分析当前项目的代码结构",
-    sequence: ["分析代码", "修复问题", "补充测试", "添加文档"],
+    label: "智能迭代",
+    getPrompt: () => "多Agent 自主决策",
   }
 
   return meta
@@ -53,11 +47,7 @@ describe("isActive", () => {
   })
 
   it("returns true for preset mode", () => {
-    expect(isActive(meta, "继续优化")).toBe(true)
-  })
-
-  it("returns true for sequence mode", () => {
-    expect(isActive(meta, "完整开发周期")).toBe(true)
+    expect(isActive(meta, "智能迭代")).toBe(true)
   })
 
   it("returns false for unknown mode", () => {
@@ -90,52 +80,14 @@ describe("getCurrentPrompt", () => {
 
   it("returns preset prompt for preset mode", () => {
     const meta = createModeMeta()
-    expect(getCurrentPrompt(meta, "继续优化", "s1", new Map())).toBe(
-      "继续优化当前功能",
-    )
-  })
-
-  it("returns sequence step by current index", () => {
-    const meta = createModeMeta()
-    const seqIdx = new Map([["s1", 2]])
-    expect(getCurrentPrompt(meta, "完整开发周期", "s1", seqIdx)).toBe("补充测试")
-  })
-
-  it("wraps sequence index with modulo for looping", () => {
-    const meta = createModeMeta()
-    const seqIdx = new Map([["s1", 5]]) // beyond length, should wrap to index 1
-    expect(getCurrentPrompt(meta, "完整开发周期", "s1", seqIdx)).toBe("修复问题")
-  })
-
-  it("returns getPrompt result when no sessionID given (sequence)", () => {
-    const meta = createModeMeta()
-    // When sessionID is null, getCurrentPrompt returns meta.getPrompt()
-    expect(getCurrentPrompt(meta, "完整开发周期", null, new Map())).toBe(
-      "分析当前项目的代码结构",
+    expect(getCurrentPrompt(meta, "智能迭代", "s1", new Map())).toBe(
+      "多Agent 自主决策",
     )
   })
 
   it("returns null for unknown mode", () => {
     const meta = createModeMeta()
     expect(getCurrentPrompt(meta, "不存在", "s1", new Map())).toBeNull()
-  })
-
-  it("starts sequence at index 0 when session has no seqIndex entry", () => {
-    const meta = createModeMeta()
-    expect(
-      getCurrentPrompt(meta, "完整开发周期", "new-session", new Map()),
-    ).toBe("分析代码")
-  })
-
-  it("returns base prompt for empty sequence array (no crash)", () => {
-    const meta = createModeMeta()
-    meta["空序列"] = {
-      type: "sequence",
-      label: "空序列",
-      getPrompt: () => "基础提示",
-      sequence: [],
-    }
-    expect(getCurrentPrompt(meta, "空序列", "s1", new Map())).toBe("基础提示")
   })
 })
 
@@ -160,14 +112,6 @@ describe("getTaskLabel", () => {
     expect(getTaskLabel(meta, null, "custom", null, new Map())).toBe("")
   })
 
-  it("returns sequence step label for sequence mode", () => {
-    const meta = createModeMeta()
-    const seqIdx = new Map([["s1", 1]])
-    expect(
-      getTaskLabel(meta, null, "完整开发周期", "s1", seqIdx),
-    ).toBe("完整开发周期 第2/4步")
-  })
-
   it("returns currentMode for unknown mode", () => {
     const meta = createModeMeta()
     expect(getTaskLabel(meta, null, "未知模式", null, new Map())).toBe("未知模式")
@@ -175,7 +119,7 @@ describe("getTaskLabel", () => {
 
   it("returns mode label for preset mode", () => {
     const meta = createModeMeta()
-    expect(getTaskLabel(meta, null, "继续优化", null, new Map())).toBe("继续优化")
+    expect(getTaskLabel(meta, null, "智能迭代", null, new Map())).toBe("智能迭代")
   })
 })
 
@@ -183,61 +127,51 @@ describe("getTaskLabel", () => {
 
 describe("buildMenuOptions", () => {
   const presets = {
-    "继续优化": "继续优化当前功能",
-    "修复 Bug": "检查潜在问题",
+    "智能迭代": "prompt text",
+    "功能优先": "prompt text",
   }
-  const sequences = { "完整开发周期": ["分析", "修复", "测试", "文档"] }
 
   it("returns array with stop/custom/ai entries first", () => {
-    const opts = buildMenuOptions(presets, sequences)
+    const opts = buildMenuOptions(presets)
     expect(opts[0].value).toBe("stop")
     expect(opts[1].value).toBe("custom")
     expect(opts[2].value).toBe("ai")
   })
 
   it("includes separator after built-in modes", () => {
-    const opts = buildMenuOptions(presets, sequences)
+    const opts = buildMenuOptions(presets)
     expect(opts[3].disabled).toBe(true)
     expect(opts[3].value).toBe("__sep__")
   })
 
   it("includes preset entries after separator", () => {
-    const opts = buildMenuOptions(presets, {})
+    const opts = buildMenuOptions(presets)
     const presetEntries = opts.filter(
-      (o) => o.value === "继续优化" || o.value === "修复 Bug",
+      (o) => o.value === "智能迭代" || o.value === "功能优先",
     )
     expect(presetEntries).toHaveLength(2)
   })
 
-  it("includes sequence entries with separator", () => {
-    const opts = buildMenuOptions({}, sequences)
-    const seqSep = opts.find((o) => o.value === "__seq_sep__")
-    expect(seqSep?.disabled).toBe(true)
-    const seqEntry = opts.find((o) => o.value === "完整开发周期")
-    expect(seqEntry).toBeTruthy()
-    expect(seqEntry.description).toBe("4 步循环")
-  })
-
-  it("omits sequence separator when no sequences", () => {
-    const opts = buildMenuOptions(presets, {})
-    const seqSep = opts.find((o) => o.value === "__seq_sep__")
-    expect(seqSep).toBeUndefined()
+  it("uses PRESET_DESC for built-in preset descriptions", () => {
+    const opts = buildMenuOptions(presets)
+    const entry = opts.find((o) => o.value === "智能迭代")
+    expect(entry.description).toBe("多Agent 自主决策：修 bug / 优化 / 新功能")
   })
 
   it("uses default icon for presets without custom icon", () => {
-    const opts = buildMenuOptions({ "自定义预设": "desc" }, {})
+    const opts = buildMenuOptions({ "自定义预设": "desc" })
     const entry = opts.find((o) => o.value === "自定义预设")
     expect(entry.title).toMatch(/📋/)
   })
 
-  it("skips sequences with empty arrays", () => {
-    const opts = buildMenuOptions({}, { "空序列": [] })
-    const entry = opts.find((o) => o.value === "空序列")
-    expect(entry).toBeUndefined()
+  it("truncates long descriptions for unknown presets", () => {
+    const opts = buildMenuOptions({ "长预设": "a".repeat(100) })
+    const entry = opts.find((o) => o.value === "长预设")
+    expect(entry.description.length).toBeLessThanOrEqual(65)
   })
 
   it("includes config separator and entry at end", () => {
-    const opts = buildMenuOptions({}, {})
+    const opts = buildMenuOptions({})
     const last1 = opts[opts.length - 2]
     const last2 = opts[opts.length - 1]
     expect(last1.value).toBe("__cfg_sep__")
