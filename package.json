@@ -1,0 +1,14 @@
+{
+  "name": "auto-drive",
+  "version": "1.0.0",
+  "description": "OpenCode 自动驾驶插件 - AI 回复结束后自动继续下一轮",
+  "type": "module",
+  "oc-plugin": ["tui"],
+  "exports": {
+    "./tui": {
+      "default": "./tui.js"
+    }
+  },
+  "files": ["tui.js"],
+  "license": "MIT"
+}
