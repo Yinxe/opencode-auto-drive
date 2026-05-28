@@ -201,8 +201,8 @@ const tui = async (api, options) => {
         placeholder="例如：继续优化当前功能"
         value={config.customPrompt}
         onConfirm={(value) => {
-          api.ui.dialog.clear()
           if (!value.trim()) return
+          api.ui.dialog.clear()
           config.customPrompt = value.trim()
           setMode("custom")
           config.mode = "custom"
