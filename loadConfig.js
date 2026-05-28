@@ -2,6 +2,9 @@ import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
 import { join, dirname } from "path"
 
+// ⚠️ 注意: 以下所有 "task 工具" 必须保持为 task，不可改为 subtask。
+// task 工具负责智能调度子智能体（派 2~4 个子智能体并行 review），
+// subtask 仅为不可调度的子任务，两者概念和效果完全不同。
 export const AI_GUIDE_PROMPT =
   "当前项目需要持续演进。你的角色是主智能体(Orchestrator)，负责统筹项目进展。\n\n" +
   "【核心流程】使用 task 工具派出 2~4 个子智能体从不同视角 Review 代码，\n" +
