@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "OpenCode 自动驾驶插件 - AI 回复结束后自动继续下一轮",
   "repository": "github:yinxin/auto-drive",
+  "homepage": "https://github.com/yinxin/auto-drive#readme",
   "bugs": "https://github.com/yinxin/auto-drive/issues",
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": ["opencode", "plugin", "tui", "automation", "ai"],
   "type": "module",
   "scripts": {
