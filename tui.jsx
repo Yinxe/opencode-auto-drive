@@ -38,8 +38,10 @@ const tui = async (api, options) => {
   if (options?.customPrompt !== undefined) config.customPrompt = options.customPrompt
   if (options?.presets) config.presets = { ...config.presets, ...options.presets }
 
+  const maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
+
   const state = {
-    maxTurns: options?.maxTurns ?? 5,
+    maxTurns: maxTurnsDefault,
     /** sessionID -> 已自动轮数 */
     turns: new Map(),
   }
@@ -49,6 +51,7 @@ const tui = async (api, options) => {
   const [lastMode, setLastMode] = createSignal(
     config.mode !== "stop" ? config.mode : null,
   )
+  const [maxTurns, setMaxTurns] = createSignal(maxTurnsDefault)
   const [sessionID, setSessionID] = createSignal(
     api.route.current.name === "session"
       ? api.route.current.params.sessionID
@@ -84,8 +87,9 @@ const tui = async (api, options) => {
     if (!sid) return
     setSessionID(sid)
 
+    const limit = maxTurns()
     const current = state.turns.get(sid) ?? 0
-    if (current >= state.maxTurns) return
+    if (limit > 0 && current >= limit) return
 
     const prompt = getPromptText(currentMode)
     if (!prompt) return
@@ -94,8 +98,9 @@ const tui = async (api, options) => {
 
     try {
       const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
+      const limitLabel = limit > 0 ? limit : "∞"
       console.warn(
-        `[auto-drive] 🚀 ${current + 1}/${state.maxTurns} ${label}`,
+        `[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`,
       )
       await api.client.session.prompt({
         sessionID: sid,
@@ -122,6 +127,7 @@ const tui = async (api, options) => {
   async function saveConfigFile() {
     const data = {
       mode: config.mode,
+      maxTurns: maxTurns(),
       customPrompt: config.customPrompt,
       presets: config.presets,
     }
@@ -190,6 +196,69 @@ const tui = async (api, options) => {
     ]
   }
 
+  /** 显示轮次选择器 */
+  function showTurnLimitSelector(chosenMode) {
+    const DialogSelect = api.ui.DialogSelect
+    api.ui.dialog.setSize("medium")
+    const currentLimit = maxTurns()
+    api.ui.dialog.replace(() => (
+      <DialogSelect
+        title="执行轮次"
+        options={[
+          { title: "♾️ 无限", value: 0, description: "不限制轮次，持续执行" },
+          { title: "1 次", value: 1 },
+          { title: "3 次", value: 3 },
+          { title: "5 次", value: 5 },
+          { title: "10 次", value: 10 },
+          { title: "20 次", value: 20 },
+          { title: "✏️ 自定义...", value: -1, description: "输入自定义轮次数" },
+        ]}
+        current={currentLimit}
+        onSelect={(option) => {
+          api.ui.dialog.clear()
+          if (option.value === -1) {
+            showCustomTurnLimit(chosenMode)
+            return
+          }
+          setMaxTurns(option.value)
+          state.maxTurns = option.value
+          setMode(chosenMode)
+          config.mode = chosenMode
+          if (chosenMode !== "stop") setLastMode(chosenMode)
+          saveConfigFile()
+          fireImmediate()
+        }}
+      />
+    ))
+  }
+
+  /** 自定义轮次数输入 */
+  function showCustomTurnLimit(chosenMode) {
+    const DialogPrompt = api.ui.DialogPrompt
+    api.ui.dialog.setSize("medium")
+    api.ui.dialog.replace(() => (
+      <DialogPrompt
+        title="输入轮次数（0 = 无限）"
+        placeholder="例如：20"
+        value={String(maxTurns())}
+        onConfirm={(value) => {
+          if (!value.trim()) return
+          api.ui.dialog.clear()
+          const n = parseInt(value.trim(), 10)
+          if (isNaN(n) || n < 0) return
+          setMaxTurns(n)
+          state.maxTurns = n
+          setMode(chosenMode)
+          config.mode = chosenMode
+          if (chosenMode !== "stop") setLastMode(chosenMode)
+          saveConfigFile()
+          fireImmediate()
+        }}
+        onCancel={() => api.ui.dialog.clear()}
+      />
+    ))
+  }
+
   /** 显示模式选择菜单 */
   function showMenu() {
     const DialogSelect = api.ui.DialogSelect
@@ -200,17 +269,21 @@ const tui = async (api, options) => {
         options={buildMenuOptions()}
         current={mode()}
         onSelect={(option) => {
-          api.ui.dialog.clear()
           if (option.value === "__sep__") return
+          if (option.value === "stop") {
+            api.ui.dialog.clear()
+            setMode("stop")
+            config.mode = "stop"
+            saveConfigFile()
+            return
+          }
           if (option.value === "custom") {
+            api.ui.dialog.clear()
             showCustomPrompt()
             return
           }
-          setMode(option.value)
-          config.mode = option.value
-          if (option.value !== "stop") setLastMode(option.value)
-          saveConfigFile()
-          fireImmediate()
+          api.ui.dialog.clear()
+          showTurnLimitSelector(option.value)
         }}
       />
     ))
@@ -229,11 +302,9 @@ const tui = async (api, options) => {
           if (!value.trim()) return
           api.ui.dialog.clear()
           config.customPrompt = value.trim()
-          setMode("custom")
-          config.mode = "custom"
           setLastMode("custom")
           saveConfigFile()
-          fireImmediate()
+          showTurnLimitSelector("custom")
         }}
         onCancel={() => {
           api.ui.dialog.clear()
