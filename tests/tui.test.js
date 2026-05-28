@@ -508,9 +508,9 @@ describe("saveConfigFile", () => {
   })
 })
 
-// ── fireImmediate retry ──
+// ── fireImmediate ──
 
-describe("fireImmediate retry", () => {
+describe("fireImmediate", () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.spyOn(console, "log").mockImplementation(() => {})
@@ -522,31 +522,11 @@ describe("fireImmediate retry", () => {
     vi.useRealTimers()
   })
 
-  it("retries when autoDrive returns false", async () => {
+  it("delegates to autoDrive for current session", async () => {
     vi.useRealTimers()
     const api = await setupWithConfig({ mode: "ai" })
-    // First call fails, second succeeds
-    api.client.session.prompt
-      .mockRejectedValueOnce(new Error("network error"))
-      .mockResolvedValueOnce(undefined)
     await plugin.fireImmediate()
-    // prompt should have been called twice (first fail, retry success)
-    expect(api.client.session.prompt).toHaveBeenCalledTimes(2)
-  })
-
-  it("stops outer retry loop when autoDrive returns false (no duplicate toasts)", async () => {
-    vi.useRealTimers()
-    const api = await setupWithConfig({ mode: "ai" })
-    // All 3 inner attempts fail → autoDrive returns false
-    api.client.session.prompt.mockRejectedValue(new Error("persistent error"))
-    await plugin.fireImmediate()
-    // autoDrive inner retry = 3 attempts, fireImmediate should NOT add more
-    expect(api.client.session.prompt).toHaveBeenCalledTimes(3)
-    // Only 1 error toast (not 3 from outer retry)
-    const errorToasts = api.ui.toast.mock.calls.filter(
-      (c) => c[0]?.variant === "error",
-    )
-    expect(errorToasts).toHaveLength(1)
+    expect(api.client.session.prompt).toHaveBeenCalledTimes(1)
   })
 
   it("does nothing when not on a session route", async () => {

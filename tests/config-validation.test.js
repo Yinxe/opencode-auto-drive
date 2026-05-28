@@ -88,8 +88,7 @@ describe("test exports", () => {
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
-      "[auto-drive] maxTurns 配置无效 (%s), 回退到 5",
-      "invalid",
+      "[auto-drive] maxTurns 配置无效 (invalid), 回退到 5",
     )
   })
 
@@ -111,8 +110,7 @@ describe("test exports", () => {
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
-      "[auto-drive] maxTurns 配置无效 (%s), 回退到 5",
-      -3,
+      "[auto-drive] maxTurns 配置无效 (-3), 回退到 5",
     )
   })
 
@@ -134,8 +132,7 @@ describe("test exports", () => {
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
-      "[auto-drive] maxTurns 配置无效 (%s), 回退到 5",
-      Infinity,
+      "[auto-drive] maxTurns 配置无效 (Infinity), 回退到 5",
     )
   })
 

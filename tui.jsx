@@ -48,7 +48,7 @@ const tui = async (api, options) => {
   let maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
   // 校验 maxTurns：必须是 >=0 的数字
   if (typeof maxTurnsDefault !== "number" || maxTurnsDefault < 0 || !Number.isFinite(maxTurnsDefault)) {
-    console.warn("[auto-drive] maxTurns 配置无效 (%s), 回退到 5", maxTurnsDefault)
+    console.warn(`[auto-drive] maxTurns 配置无效 (${maxTurnsDefault}), 回退到 5`)
     maxTurnsDefault = 5
   }
 
@@ -56,7 +56,6 @@ const tui = async (api, options) => {
   const pendingLocks = new Set()
 
   /** 失败重试配置 */
-  const RETRY_MAX_ATTEMPTS = 3
   const RETRY_BASE_DELAY_MS = 500
 
   const state = {
@@ -231,7 +230,7 @@ const tui = async (api, options) => {
   async function fireImmediate() {
     const route = api.route.current
     if (route.name !== "session") {
-      console.log("[auto-drive] fireImmediate: 不在会话中, route=%s", route.name)
+      console.log(`[auto-drive] fireImmediate: 不在会话中, route=${route.name}`)
       return
     }
     const sid = route.params.sessionID
@@ -239,14 +238,9 @@ const tui = async (api, options) => {
       console.log("[auto-drive] fireImmediate: 无 sessionID")
       return
     }
-    console.log("[auto-drive] fireImmediate: session=%s mode=%s", sid, mode())
-    // autoDrive 已有内层重试处理网络错误，外层仅对跳过（null）重试
-    for (let i = 0; i < RETRY_MAX_ATTEMPTS; i++) {
-      const result = await autoDrive({ properties: { sessionID: sid } })
-      if (result === true) return
-      if (result === false) break // 错误已由内层重试处理，不重复
-      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * (i + 1)))
-    }
+    console.log(`[auto-drive] fireImmediate: session=${sid} mode=${mode()}`)
+    // autoDrive 已有内层重试处理网络错误，外层直接调用即可
+    await autoDrive({ properties: { sessionID: sid } })
   }
 
   /** 保存当前配置到项目级文件（保持未知字段不丢失） */
