@@ -1,4 +1,4 @@
-import { PRESET_ICONS } from "./prompts.js"
+import { PRESET_ICONS, PRESET_DESC } from "./prompts.js"
 
 /** 获取当前轮实际发送的 prompt（序列模式取当前步进） */
 export function getCurrentPrompt(modeMeta, currentMode, sessionID, seqIndex) {
@@ -37,10 +37,10 @@ export function buildMenuOptions(presets, sequences) {
     { title: "✏️ 自定义", value: "custom", description: "输入自定义提示词" },
     { title: "🤖 AI + 多Agent", value: "ai", description: "派出多Agent 并行分析代码，综合后决策执行" },
     { title: "─".repeat(20), value: "__sep__", disabled: true, description: "" },
-    ...Object.entries(presets ?? {}).map(([name, desc]) => ({
+    ...Object.entries(presets ?? {}).map(([name, prompt]) => ({
       title: `${PRESET_ICONS[name] ?? "📋"} ${name}`,
       value: name,
-      description: desc,
+      description: PRESET_DESC[name] ?? (prompt ? prompt.slice(0, 60) + "…" : ""),
     })),
     ...(sequences && Object.keys(sequences).length > 0
       ? [

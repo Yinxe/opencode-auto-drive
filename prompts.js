@@ -101,6 +101,13 @@ export const PRESET_ICONS = {
   "自定义": "✏️",
 }
 
+export const PRESET_DESC = {
+  "智能迭代": "多Agent 自主决策：修 bug / 优化 / 新功能",
+  "功能优先": "多Agent 聚焦新功能开发",
+  "维护优先": "多Agent 专注修 bug 与代码质量",
+  "自定义": "用户自定义提示词",
+}
+
 export const DEFAULT_SEQUENCES = {
   "迭代周期": [
     "审查当前代码，找出本轮最值得处理的 2~3 个问题。列出影响范围和修复建议。",
