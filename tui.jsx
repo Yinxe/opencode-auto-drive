@@ -78,6 +78,13 @@ const tui = async (api, options) => {
     return currentMode !== "stop" && !!getPromptText(currentMode)
   }
 
+  /** 获取当前模式的可读任务标签 */
+  function getTaskLabel(currentMode) {
+    if (currentMode === "ai") return "AI 驱动"
+    if (currentMode === "custom") return config.customPrompt.slice(0, 20)
+    return currentMode
+  }
+
   /** 向会话发送下一轮提示词 */
   async function autoDrive(event) {
     const currentMode = mode()
@@ -89,6 +96,16 @@ const tui = async (api, options) => {
 
     const limit = maxTurns()
     const current = state.turns.get(sid) ?? 0
+
+    // 刚完成一轮对话 → toast 通知
+    if (current > 0) {
+      const limitLabel = limit > 0 ? limit : "∞"
+      api.ui.toast({
+        message: `🚀 第${current}轮完成 (${current}/${limitLabel}) | ${getTaskLabel(currentMode)}`,
+        variant: "info",
+      })
+    }
+
     if (limit > 0 && current >= limit) return
 
     const prompt = getPromptText(currentMode)
@@ -344,6 +361,8 @@ const tui = async (api, options) => {
         const currentMode = mode()
         const theme = ctx.theme.current
         const sessionTurns = getSessionTurns()
+        const limit = maxTurns()
+        const limitLabel = limit > 0 ? limit : "∞"
 
         return (
           <box flexDirection="row" paddingLeft={1} paddingRight={1}>
@@ -358,11 +377,11 @@ const tui = async (api, options) => {
               <text fg={theme.primary}>🚀 AD</text>
 
               <Show when={currentMode === "ai"}>
-                <text fg={theme.text}> 🤖</text>
+                <text fg={theme.text}> 🤖 {getTaskLabel(currentMode)}</text>
               </Show>
               <Show when={currentMode === "custom"}>
                 <text fg={theme.textMuted}> "</text>
-                <text fg={theme.text}>{config.customPrompt.slice(0, 30)}</text>
+                <text fg={theme.text}>{config.customPrompt.slice(0, 20)}</text>
                 <text fg={theme.textMuted}>"</text>
               </Show>
               <Show when={currentMode !== "ai" && currentMode !== "custom"}>
@@ -370,7 +389,7 @@ const tui = async (api, options) => {
                 <text fg={theme.text}>{currentMode}</text>
               </Show>
 
-              <text fg={theme.textMuted}> {sessionTurns}/{state.maxTurns}</text>
+              <text fg={theme.textMuted}> {sessionTurns}/{limitLabel}</text>
             </Show>
           </box>
         )
