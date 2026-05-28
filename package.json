@@ -28,7 +28,7 @@
   ],
   "peerDependencies": {
     "solid-js": "^1.x",
-    "@opentui/solid": "^1.x"
+    "@opentui/solid": ">=0.2.15"
   },
   "license": "MIT",
   "devDependencies": {

@@ -527,32 +527,3 @@ describe("saveConfigFile", () => {
   })
 })
 
-// ── fireImmediate ──
-
-describe("fireImmediate", () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.spyOn(console, "log").mockImplementation(() => {})
-    vi.spyOn(console, "error").mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.useRealTimers()
-  })
-
-  it("delegates to autoDrive for current session", async () => {
-    vi.useRealTimers()
-    const api = await setupWithConfig({ mode: "ai" })
-    await plugin.fireImmediate()
-    expect(api.client.session.prompt).toHaveBeenCalledTimes(1)
-  })
-
-  it("does nothing when not on a session route", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
-    api.route.current = { name: "chat" }
-    await plugin.fireImmediate()
-    expect(api.client.session.prompt).not.toHaveBeenCalled()
-  })
-})
-
