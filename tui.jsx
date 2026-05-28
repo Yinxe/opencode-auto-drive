@@ -1,26 +1,12 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, Show } from "solid-js"
-import { readFile, writeFile, mkdir } from "fs/promises"
-import { homedir } from "os"
-import { join, dirname } from "path"
-
-const AI_GUIDE_PROMPT =
-  "基于当前项目和对话上下文，决定下一步最有价值的事。" +
-  "可以改 bug、重构、加新功能、加文档——完全由你判断。先输出计划再执行。"
-
-const DEFAULT_PRESETS = {
-  "继续优化": "继续优化当前功能，添加必要的注释和类型完善",
-  "修复 Bug": "检查当前代码中的潜在问题并修复",
-  "补充测试": "为当前代码添加单元测试和集成测试",
-  "添加文档": "为当前代码添加中文文档注释",
-}
-
-const PRESET_ICONS = {
-  "继续优化": "📋",
-  "修复 Bug": "🐛",
-  "补充测试": "🧪",
-  "添加文档": "📝",
-}
+import {
+  AI_GUIDE_PROMPT,
+  DEFAULT_PRESETS,
+  PRESET_ICONS,
+  loadConfig,
+  saveProjectConfig,
+} from "./loadConfig.js"
 
 /**
  * OpenCode 自动驾驶插件
@@ -35,58 +21,13 @@ const PRESET_ICONS = {
  *   ├─ 🤖 AI 驱动
  *   └─ 预设（"继续优化"、"修复 Bug"等）
  *
+ *   Ctrl+Alt+A    快速切换启用/停止
+ *
  * 预设配置（tui.json 或 auto-drive.json）：
  *   "pluginConfig": {
  *     "auto-drive": { "mode": "继续优化", "maxTurns": 10 }
  *   }
  */
-
-/** 从文件读取 JSON，若不存在则返回 null */
-async function readJSON(path) {
-  try {
-    const raw = await readFile(path, "utf-8")
-    return JSON.parse(raw)
-  } catch (err) {
-    if (err?.code === "ENOENT") return null
-    console.warn(`[auto-drive] 配置文件解析失败: ${path}`, err)
-    return null
-  }
-}
-
-/** 读取并合并全局 + 项目配置，返回 { merged, projectPath } */
-async function loadConfig(projectDir) {
-  const globalPath = join(homedir(), ".config", "opencode", "auto-drive.json")
-  const projectPath = join(projectDir, ".opencode", "plugins", "auto-drive.json")
-
-  const [global, project] = await Promise.all([
-    readJSON(globalPath),
-    readJSON(projectPath),
-  ])
-
-  const merged = {
-    mode: "stop",
-    customPrompt: "",
-    presets: { ...DEFAULT_PRESETS },
-    ...(global ?? {}),
-    ...(project ?? {}),
-  }
-
-  // 深合并 presets（避免 project 配置浅覆盖整个预设集合）
-  merged.presets = {
-    ...DEFAULT_PRESETS,
-    ...(global?.presets ?? {}),
-    ...(project?.presets ?? {}),
-  }
-
-  return { merged, projectPath }
-}
-
-/** 将配置写入项目级文件 */
-async function saveProjectConfig(path, config) {
-  const dir = dirname(path)
-  await mkdir(dir, { recursive: true })
-  await writeFile(path, JSON.stringify(config, null, 2), "utf-8")
-}
 
 /** @type {import('@opencode-ai/plugin/tui').TuiPlugin} */
 const tui = async (api, options) => {
@@ -106,10 +47,16 @@ const tui = async (api, options) => {
 
   // ── Solid 信号 ──
   const [mode, setMode] = createSignal(config.mode)
-  const [turnCount, setTurnCount] = createSignal(0)
   const [lastMode, setLastMode] = createSignal(
     config.mode !== "stop" ? config.mode : null,
   )
+
+  /** 获取当前 session 的轮次（用于状态栏显示） */
+  function getSessionTurns() {
+    const route = api.route.current
+    if (route.name !== "session") return 0
+    return state.turns.get(route.params.sessionID) ?? 0
+  }
 
   /** 获取当前模式的 prompt 文本 */
   function getPromptText(currentMode) {
@@ -122,11 +69,6 @@ const tui = async (api, options) => {
   /** 根据 mode 判断是否活跃 */
   function isActive(currentMode) {
     return currentMode !== "stop" && !!getPromptText(currentMode)
-  }
-
-  /** 计算所有会话的累计轮数 */
-  function computeTurnCount() {
-    return Array.from(state.turns.values()).reduce((a, b) => a + b, 0)
   }
 
   /** 向会话发送下一轮提示词 */
@@ -144,7 +86,6 @@ const tui = async (api, options) => {
     if (!prompt) return
 
     state.turns.set(sessionID, current + 1)
-    setTurnCount(computeTurnCount())
 
     try {
       const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
@@ -161,6 +102,55 @@ const tui = async (api, options) => {
         err instanceof Error ? err.message : err,
       )
     }
+  }
+
+  /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
+  function fireImmediate() {
+    const route = api.route.current
+    if (route.name !== "session") return
+    const sessionID = route.params.sessionID
+    if (!sessionID) return
+    autoDrive({ properties: { sessionID } })
+  }
+
+  /** 保存当前配置到项目级文件 */
+  async function saveConfigFile() {
+    const data = {
+      mode: config.mode,
+      customPrompt: config.customPrompt,
+      presets: config.presets,
+    }
+    await saveProjectConfig(projectPath, data).catch((err) => {
+      console.error("[auto-drive] 配置保存失败:", err)
+    })
+  }
+
+  /** 快速切换：活跃→停止 / 停止→恢复上次模式 */
+  function quickToggle() {
+    if (mode() !== "stop") {
+      setLastMode(mode())
+      setMode("stop")
+      config.mode = "stop"
+    } else if (lastMode()) {
+      const previous = lastMode()
+      setMode(previous)
+      config.mode = previous
+      saveConfigFile()
+      fireImmediate()
+      return
+    } else {
+      // 从未启用过，默认用第一个预设
+      const first = Object.keys(config.presets)[0]
+      if (first) {
+        setMode(first)
+        config.mode = first
+        setLastMode(first)
+        saveConfigFile()
+        fireImmediate()
+        return
+      }
+    }
+    saveConfigFile()
   }
 
   /** 构建模式选择菜单选项 */
@@ -193,15 +183,6 @@ const tui = async (api, options) => {
         description: desc,
       })),
     ]
-  }
-
-  /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
-  function fireImmediate() {
-    const route = api.route.current
-    if (route.name !== "session") return
-    const sessionID = route.params.sessionID
-    if (!sessionID) return
-    autoDrive({ properties: { sessionID } })
   }
 
   /** 显示模式选择菜单 */
@@ -256,19 +237,7 @@ const tui = async (api, options) => {
     ))
   }
 
-  /** 保存当前配置到项目级文件 */
-  async function saveConfigFile() {
-    const data = {
-      mode: config.mode,
-      customPrompt: config.customPrompt,
-      presets: config.presets,
-    }
-    await saveProjectConfig(projectPath, data).catch((err) => {
-      console.error("[auto-drive] 配置保存失败:", err)
-    })
-  }
-
-  // ── 注册 Ctrl+P / /auto-drive 命令 ──
+  // ── 注册命令 ──
   const unregCmd = api.command.register(() => [
     {
       title: `Auto-Drive: ${mode() === "stop" ? "⏸ 已停止" : `🚀 ${mode()}`}`,
@@ -277,6 +246,14 @@ const tui = async (api, options) => {
       category: "auto-drive",
       slash: { name: "auto-drive", aliases: ["ad"] },
       onSelect: showMenu,
+    },
+    {
+      title: "Auto-Drive: 切换",
+      value: "auto-drive-toggle",
+      description: `快速切换启用/停止`,
+      keybind: "ctrl+alt+a",
+      category: "auto-drive",
+      onSelect: quickToggle,
     },
   ])
 
@@ -290,6 +267,7 @@ const tui = async (api, options) => {
       app_bottom(ctx) {
         const currentMode = mode()
         const theme = ctx.theme.current
+        const sessionTurns = getSessionTurns()
 
         return (
           <box flexDirection="row" paddingLeft={1} paddingRight={1}>
@@ -316,7 +294,7 @@ const tui = async (api, options) => {
                 <text fg={theme.text}>{currentMode}</text>
               </Show>
 
-              <text fg={theme.textMuted}> {turnCount()}/{state.maxTurns}</text>
+              <text fg={theme.textMuted}> {sessionTurns}/{state.maxTurns}</text>
             </Show>
           </box>
         )
