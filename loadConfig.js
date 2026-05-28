@@ -82,5 +82,5 @@ export async function loadConfig(projectDir) {
 export async function saveProjectConfig(path, config) {
   const dir = dirname(path)
   await mkdir(dir, { recursive: true })
-  await writeFile(path, JSON.stringify(config, null, 2), "utf-8")
+  await writeFile(path, JSON.stringify(config, null, 2) + "\n", "utf-8")
 }
