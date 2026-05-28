@@ -128,13 +128,13 @@ const tui = async (api, options) => {
     return currentMode
   }
 
-  /** 向会话发送下一轮提示词 */
+  /** 向会话发送下一轮提示词。返回 true=成功 false=失败 null=跳过 */
   async function autoDrive(event) {
     const currentMode = mode()
-    if (!isActive(currentMode)) return
+    if (!isActive(currentMode)) return null
 
     const { sessionID: sid } = event.properties
-    if (!sid) return
+    if (!sid) return null
     setSessionID(sid)
 
     const limit = maxTurns()
@@ -149,10 +149,10 @@ const tui = async (api, options) => {
       })
     }
 
-    if (limit > 0 && current >= limit) return
+    if (limit > 0 && current >= limit) return null
 
     const prompt = getCurrentPrompt(currentMode)
-    if (!prompt) return
+    if (!prompt) return null
 
     try {
       const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
@@ -171,24 +171,39 @@ const tui = async (api, options) => {
         state.seqIndex.set(sid, (state.seqIndex.get(sid) ?? 0) + 1)
       }
       bumpTurnRev()
+      return true
     } catch (err) {
       console.error(
         "[auto-drive] ❌",
         err instanceof Error ? err.message : err,
       )
+      return false
     }
   }
 
   /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
   async function fireImmediate() {
     const route = api.route.current
-    if (route.name !== "session") return
-    const sessionID = route.params.sessionID
-    if (!sessionID) return
-    try {
-      await autoDrive({ properties: { sessionID } })
-    } catch {
-      // autoDrive 内部已 try/catch，此处仅防同步异常
+    if (route.name !== "session") {
+      console.warn("[auto-drive] fireImmediate: 不在会话中, route=%s", route.name)
+      return
+    }
+    const sid = route.params.sessionID
+    if (!sid) {
+      console.warn("[auto-drive] fireImmediate: 无 sessionID")
+      return
+    }
+    console.warn("[auto-drive] fireImmediate: session=%s mode=%s", sid, mode())
+    // 失败时最多重试 2 次（新 session 可能需要短暂就绪时间）
+    for (let i = 0; i < 3; i++) {
+      const result = await autoDrive({ properties: { sessionID: sid } })
+      if (result !== false) return // true=成功 null=跳过（都不是错误）
+      if (i < 2) {
+        console.warn("[auto-drive] fireImmediate 重试 %d/2", i + 1)
+        await new Promise((r) => setTimeout(r, 500 * (i + 1)))
+      } else {
+        console.error("[auto-drive] ❌ fireImmediate: 发送失败, 已重试 2 次")
+      }
     }
   }
 
