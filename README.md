@@ -12,7 +12,7 @@ opencode plugin add /path/to/auto-drive
 cp -r auto-drive .opencode/plugins/
 ```
 
-启用后在 TUI 输入 `/auto-drive` 或按 `Ctrl+P` 搜索 `auto-drive` 打开模式菜单。
+启用后在 TUI 输入 `/auto-drive` 或按 `Ctrl+P` 搜索 `auto-drive` 打开模式菜单。输入 `/auto-drive-config`（或 `/adc`）查看当前合并的配置。
 
 ## 配置
 
@@ -110,11 +110,11 @@ TUI 底部显示当前状态：
 ⏸ AD [继续优化]                 ← 停止（显示上次模式）
 🚀 AD 🤖 AI 驱动  2/∞           ← AI 模式
 🚀 AD 🐛 修复 Bug  3/5          ← 预设模式
-🚀 AD "优化界面"  1/3           ← 自定义模式
+🚀 AD 优化界面  1/3           ← 自定义模式
 🚀 AD 完整开发周期 第2/4步 2/5  ← 序列模式
 ```
 
-每轮完成后 toast 通知：`🚀 第3轮完成 (3/5) | 修复 Bug`
+从第二轮开始每轮完成后 toast 通知：`🚀 第3轮完成 (3/5) | 修复 Bug`（第一轮无通知，避免启动时干扰）
 
 ## 完整配置示例
 

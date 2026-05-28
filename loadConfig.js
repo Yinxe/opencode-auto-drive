@@ -62,7 +62,7 @@ async function readJSON(path) {
     return JSON.parse(raw)
   } catch (err) {
     if (err?.code === "ENOENT") return null
-        console.warn(`[auto-drive] 配置文件解析失败: ${path}`, err)
+    console.warn(`[auto-drive] 配置文件解析失败: ${path}`, err)
     return null
   }
 }

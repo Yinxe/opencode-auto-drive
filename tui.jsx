@@ -17,7 +17,7 @@ import {
  * OpenCode 自动驾驶插件
  *
  * 监听 session.idle，AI 回复结束后自动发送下一轮 prompt。
- * 支持停止 / 自定义 / AI 驱动 / 预设四种模式。
+ * 支持停止 / 自定义 / AI 驱动 / 预设 / 序列五种模式。
  *
  * 使用方式：
  *   /auto-drive 或 Ctrl+P → auto-drive → Enter    打开模式菜单
