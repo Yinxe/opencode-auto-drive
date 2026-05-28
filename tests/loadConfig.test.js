@@ -4,10 +4,8 @@ import {
   DEFAULT_PRESETS,
   PRESET_ICONS,
   DEFAULT_SEQUENCES,
-  loadConfig,
-  readJSON,
-  saveProjectConfig,
-} from "../loadConfig.js"
+} from "../prompts.js"
+import { loadConfig, saveProjectConfig, readJSON } from "../loadConfig.js"
 import { mkdir, writeFile, unlink, rmdir, readdir } from "fs/promises"
 import { join } from "path"
 import { tmpdir } from "os"

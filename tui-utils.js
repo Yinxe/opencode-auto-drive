@@ -1,4 +1,4 @@
-import { PRESET_ICONS } from "./loadConfig.js"
+import { PRESET_ICONS } from "./prompts.js"
 
 /** 获取当前轮实际发送的 prompt（序列模式取当前步进） */
 export function getCurrentPrompt(modeMeta, currentMode, sessionID, seqIndex) {

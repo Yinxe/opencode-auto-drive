@@ -5,7 +5,7 @@ import {
   getTaskLabel,
   buildMenuOptions,
 } from "../tui-utils.js"
-import { AI_GUIDE_PROMPT } from "../loadConfig.js"
+import { AI_GUIDE_PROMPT } from "../prompts.js"
 
 // ── Shared test fixtures ──
 

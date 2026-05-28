@@ -2,6 +2,8 @@
 import { createSignal, Show } from "solid-js"
 import {
   AI_GUIDE_PROMPT,
+} from "./prompts.js"
+import {
   loadConfig,
   saveProjectConfig,
   readJSON,

@@ -24,6 +24,7 @@
   "files": [
     "tui.jsx",
     "tui-utils.js",
+    "prompts.js",
     "loadConfig.js"
   ],
   "peerDependencies": {

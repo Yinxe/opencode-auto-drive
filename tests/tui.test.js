@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import plugin from "../tui.jsx"
-import { AI_GUIDE_PROMPT } from "../loadConfig.js"
+import { AI_GUIDE_PROMPT } from "../prompts.js"
 import { createMockApi } from "./helpers/mock-api.js"
 
 // ── Solid.js mock (host-provided, not in node_modules) ──
