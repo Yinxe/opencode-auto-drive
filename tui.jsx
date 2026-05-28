@@ -142,16 +142,88 @@ const tui = async (api, options) => {
     }
   }
 
-  /** 切换开关 */
-  function toggle() {
-    const newMode = mode() === "stop" ? "继续优化" : "stop"
-    setMode(newMode)
-    config.mode = newMode
-    api.ui.toast({
-      message: newMode !== "stop"
-        ? "🚀 自动驾驶已启用"
-        : "⏸️ 自动驾驶已禁用",
-      variant: newMode !== "stop" ? "success" : "warning",
+  /** 构建模式选择菜单选项 */
+  function buildMenuOptions() {
+    return [
+      {
+        title: "⏸ 停止",
+        value: "stop",
+        description: "关闭自动驾驶",
+      },
+      {
+        title: "✏️ 自定义",
+        value: "custom",
+        description: "输入自定义提示词",
+      },
+      {
+        title: "🤖 AI 驱动",
+        value: "ai",
+        description: "AI 自主决定下一步方向",
+      },
+      ...Object.entries(config.presets).map(([name, desc]) => ({
+        title: `📋 ${name}`,
+        value: name,
+        description: desc,
+      })),
+    ]
+  }
+
+  /** 显示模式选择菜单 */
+  function showMenu() {
+    const DialogSelect = api.ui.DialogSelect
+    api.ui.dialog.setSize("medium")
+    api.ui.dialog.replace(() => (
+      <DialogSelect
+        title="Auto-Drive 自动驾驶"
+        options={buildMenuOptions()}
+        current={mode()}
+        onSelect={(option) => {
+          api.ui.dialog.clear()
+          if (option.value === "custom") {
+            showCustomPrompt()
+            return
+          }
+          setMode(option.value)
+          config.mode = option.value
+          saveConfigFile()
+        }}
+      />
+    ))
+  }
+
+  /** 自定义提示词输入弹窗 */
+  function showCustomPrompt() {
+    const DialogPrompt = api.ui.DialogPrompt
+    api.ui.dialog.setSize("medium")
+    api.ui.dialog.replace(() => (
+      <DialogPrompt
+        title="✏️ 输入自定义提示词"
+        placeholder="例如：继续优化当前功能"
+        value={config.customPrompt}
+        onConfirm={(value) => {
+          api.ui.dialog.clear()
+          if (!value.trim()) return
+          config.customPrompt = value.trim()
+          setMode("custom")
+          config.mode = "custom"
+          saveConfigFile()
+        }}
+        onCancel={() => {
+          api.ui.dialog.clear()
+        }}
+      />
+    ))
+  }
+
+  /** 保存当前配置到项目级文件 */
+  async function saveConfigFile() {
+    const data = {
+      mode: config.mode,
+      customPrompt: config.customPrompt,
+      presets: config.presets,
+    }
+    await saveProjectConfig(projectPath, data).catch((err) => {
+      console.error("[auto-drive] 配置保存失败:", err)
     })
   }
 
@@ -163,7 +235,7 @@ const tui = async (api, options) => {
       description: `当前模式: ${mode()}`,
       category: "auto-drive",
       slash: { name: "auto-drive", aliases: ["ad"] },
-      onSelect: toggle,
+      onSelect: showMenu,
     },
   ])
 
