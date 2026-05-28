@@ -1,5 +1,5 @@
 /** @jsxImportSource @opentui/solid */
-import { createSignal } from "solid-js"
+import { createSignal, Show } from "solid-js"
 import { readFile, writeFile, mkdir } from "fs/promises"
 import { homedir } from "os"
 import { join, dirname } from "path"
@@ -172,6 +172,28 @@ const tui = async (api, options) => {
     ]
   }
 
+  /** 对当前会话立即执行一次自动驾驶 */
+  async function fireImmediate() {
+    const route = api.route.current
+    if (route.name !== "session") return
+    const sessionID = route.params.sessionID
+    if (!sessionID) return
+
+    const currentMode = mode()
+    const promptText = getPromptText(currentMode)
+    if (!promptText) return
+
+    console.warn(`[auto-drive] 🚀 立即执行 "${currentMode}"`)
+    try {
+      await api.client.session.prompt({
+        sessionID,
+        parts: [{ type: "text", text: promptText }],
+      })
+    } catch (err) {
+      console.error("[auto-drive] ❌", err instanceof Error ? err.message : err)
+    }
+  }
+
   /** 显示模式选择菜单 */
   function showMenu() {
     const DialogSelect = api.ui.DialogSelect
@@ -190,6 +212,7 @@ const tui = async (api, options) => {
           setMode(option.value)
           config.mode = option.value
           saveConfigFile()
+          fireImmediate()
         }}
       />
     ))
@@ -211,6 +234,7 @@ const tui = async (api, options) => {
           setMode("custom")
           config.mode = "custom"
           saveConfigFile()
+          fireImmediate()
         }}
         onCancel={() => {
           api.ui.dialog.clear()
@@ -254,39 +278,26 @@ const tui = async (api, options) => {
         const currentMode = mode()
         const theme = ctx.theme.current
 
-        if (!isActive(currentMode)) {
-          return (
-            <box paddingLeft={1} paddingRight={1}>
+        return (
+          <box flexDirection="row" paddingLeft={1} paddingRight={1}>
+            <Show when={!isActive(currentMode)}>
               <text fg={theme.textMuted}>⏸ AD</text>
-            </box>
-          )
-        }
-
-        if (currentMode === "ai") {
-          return (
-            <box paddingLeft={1} paddingRight={1}>
+            </Show>
+            <Show when={currentMode === "ai"}>
               <text fg={theme.primary}>🚀 AD</text>
               <text fg={theme.text}> 🤖</text>
-            </box>
-          )
-        }
-
-        if (currentMode === "custom") {
-          return (
-            <box paddingLeft={1} paddingRight={1}>
+            </Show>
+            <Show when={currentMode === "custom"}>
               <text fg={theme.primary}>🚀 AD</text>
               <text fg={theme.textMuted}> "</text>
-              <text fg={theme.text}>{config.customPrompt}</text>
+              <text fg={theme.text}>{config.customPrompt.slice(0, 40)}</text>
               <text fg={theme.textMuted}>"</text>
-            </box>
-          )
-        }
-
-        return (
-          <box paddingLeft={1} paddingRight={1}>
-            <text fg={theme.primary}>🚀 AD</text>
-            <text fg={theme.textMuted}> </text>
-            <text fg={theme.text}>{currentMode}</text>
+            </Show>
+            <Show when={currentMode !== "stop" && currentMode !== "ai" && currentMode !== "custom"}>
+              <text fg={theme.primary}>🚀 AD</text>
+              <text fg={theme.textMuted}> </text>
+              <text fg={theme.text}>{currentMode}</text>
+            </Show>
           </box>
         )
       },
