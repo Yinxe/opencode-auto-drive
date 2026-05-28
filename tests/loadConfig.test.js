@@ -197,7 +197,7 @@ describe("readJSON", () => {
 
   it("returns null and logs warning for malformed JSON", async () => {
     await writeFile(testPath, "{ mode: ai }") // invalid JSON (unquoted keys)
-    const warnSpy = vi.spyOn(console, "log").mockImplementation(() => {})
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {})
     const result = await readJSON(testPath)
     expect(result).toBeNull()
     // Should log a warning about parse failure

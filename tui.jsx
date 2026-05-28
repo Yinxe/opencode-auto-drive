@@ -399,6 +399,43 @@ const tui = async (api, options) => {
     ))
   }
 
+  /** 显示当前合并后的配置信息 */
+  function showConfig() {
+    const DialogSelect = api.ui.DialogSelect
+    api.ui.dialog.setSize("large")
+    const limit = maxTurns()
+    const limitLabel = limit > 0 ? limit : "∞"
+    const lines = [
+      `模式: ${mode() === "stop" ? "⏸" : "🚀"} ${mode()}`,
+      `轮次: ${getSessionTurns()}/${limitLabel}`,
+      `自定义提示词: ${(config.customPrompt || "(未设置)").slice(0, 80)}`,
+      ``,
+      `预设 (${Object.keys(config.presets ?? {}).length}):`,
+      ...Object.entries(config.presets ?? {}).map(
+        ([k, v]) => `  ${k}: "${String(v).slice(0, 60)}"`,
+      ),
+      ``,
+      `序列 (${Object.keys(config.sequences ?? {}).length}):`,
+      ...Object.entries(config.sequences ?? {}).map(
+        ([k, v]) => `  ${k}: ${Array.isArray(v) ? `${v.length} 步循环` : "?"}`,
+      ),
+      ``,
+      `配置优先级: 全局 → 项目 → 插件选项`,
+    ].join("\n")
+
+    api.ui.dialog.replace(() => (
+      <DialogSelect
+        title="Auto-Drive 配置"
+        options={[
+          { title: lines, value: "info", disabled: true },
+          { title: "关闭", value: "close" },
+        ]}
+        onSelect={(opt) => opt.value === "close" && api.ui.dialog.clear()}
+        onCancel={() => api.ui.dialog.clear()}
+      />
+    ))
+  }
+
   // ── 注册命令 ──
   let unregCmd = () => {}
   unregCmd = api.command.register(() => [
@@ -409,6 +446,14 @@ const tui = async (api, options) => {
       category: "auto-drive",
       slash: { name: "auto-drive", aliases: ["ad"] },
       onSelect: showMenu,
+    },
+    {
+      title: "Auto-Drive: 查看配置",
+      value: "auto-drive-config",
+      description: "显示当前合并后的配置（全局+项目+插件选项）",
+      category: "auto-drive",
+      slash: { name: "auto-drive-config", aliases: ["adc"] },
+      onSelect: showConfig,
     },
     {
       title: "Auto-Drive: 切换",

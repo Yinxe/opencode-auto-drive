@@ -382,3 +382,33 @@ describe("fireImmediate", () => {
   })
 })
 
+// ── showConfig ──
+
+describe("showConfig", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("registers auto-drive-config command with slash alias", async () => {
+    const api = await setupWithConfig({ mode: "ai" })
+    const cmds = api.command.register.mock.calls[0][0]()
+    const configCmd = cmds.find((c) => c.value === "auto-drive-config")
+    expect(configCmd).toBeTruthy()
+    expect(configCmd.slash.name).toBe("auto-drive-config")
+    expect(configCmd.slash.aliases).toContain("adc")
+  })
+
+  it("opens dialog with mode and turn info when selected", async () => {
+    const api = await setupWithConfig({ mode: "ai" })
+    const cmds = api.command.register.mock.calls[0][0]()
+    const configCmd = cmds.find((c) => c.value === "auto-drive-config")
+    configCmd.onSelect()
+    expect(api.ui.dialog.setSize).toHaveBeenCalledWith("large")
+    expect(api.ui.dialog.replace).toHaveBeenCalled()
+  })
+})
+
