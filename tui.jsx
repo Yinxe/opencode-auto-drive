@@ -1,5 +1,19 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, Show } from "solid-js"
+import { readFile, writeFile, mkdir } from "fs/promises"
+import { homedir } from "os"
+import { join, dirname } from "path"
+
+const AI_GUIDE_PROMPT =
+  "基于当前项目和对话上下文，决定下一步最有价值的事。" +
+  "可以改 bug、重构、加新功能、加文档——完全由你判断。先输出计划再执行。"
+
+const DEFAULT_PRESETS = {
+  "继续优化": "继续优化当前功能，添加必要的注释和类型完善",
+  "修复 Bug": "检查当前代码中的潜在问题并修复",
+  "补充测试": "为当前代码添加单元测试和集成测试",
+  "添加文档": "为当前代码添加中文文档注释",
+}
 
 /**
  * OpenCode 自动驾驶插件
@@ -16,19 +30,76 @@ import { createSignal, Show } from "solid-js"
  *   }
  */
 
+/** 从文件读取 JSON，若不存在则返回 null */
+async function readJSON(path) {
+  try {
+    const raw = await readFile(path, "utf-8")
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+/** 读取并合并全局 + 项目配置，返回 { merged, projectPath } */
+async function loadConfig(projectDir) {
+  const globalPath = join(homedir(), ".config", "opencode", "auto-drive.json")
+  const projectPath = join(projectDir, ".opencode", "plugins", "auto-drive.json")
+
+  const [global, project] = await Promise.all([
+    readJSON(globalPath),
+    readJSON(projectPath),
+  ])
+
+  const merged = {
+    mode: "stop",
+    customPrompt: "",
+    presets: { ...DEFAULT_PRESETS },
+    ...(global ?? {}),
+    ...(project ?? {}),
+  }
+
+  return { merged, projectPath }
+}
+
+/** 将配置写入项目级文件 */
+async function saveProjectConfig(path, config) {
+  const dir = dirname(path)
+  await mkdir(dir, { recursive: true })
+  await writeFile(path, JSON.stringify(config, null, 2), "utf-8")
+}
+
 /** @type {import('@opencode-ai/plugin/tui').TuiPlugin} */
 const tui = async (api, options) => {
+  const projectDir = api.state.path.directory
+  const { merged: config, projectPath } = await loadConfig(projectDir)
+
+  // Options 最高优先级覆盖
+  if (options?.mode) config.mode = options.mode
+  if (options?.customPrompt) config.customPrompt = options.customPrompt
+  if (options?.presets) config.presets = { ...config.presets, ...options.presets }
+
   const state = {
-    enabled: options?.enabled ?? false,
     maxTurns: options?.maxTurns ?? 5,
-    prompt: options?.prompt ?? "继续",
     /** sessionID -> 已自动轮数 */
     turns: new Map(),
   }
 
-  // ── Solid 信号：驱动底部状态栏响应式更新 ──
-  const [enabled, setEnabled] = createSignal(state.enabled)
+  // ── Solid 信号 ──
+  const [mode, setMode] = createSignal(config.mode)
   const [turnCount, setTurnCount] = createSignal(0)
+
+  /** 获取当前模式的 prompt 文本 */
+  function getPromptText(currentMode) {
+    if (currentMode === "ai") return AI_GUIDE_PROMPT
+    if (currentMode === "custom") return config.customPrompt
+    if (config.presets[currentMode]) return config.presets[currentMode]
+    return null
+  }
+
+  /** 根据 mode 判断是否活跃 */
+  function isActive(currentMode) {
+    return currentMode !== "stop" && getPromptText(currentMode) !== null
+  }
 
   /** 计算所有会话的累计轮数 */
   function computeTurnCount() {
@@ -37,7 +108,8 @@ const tui = async (api, options) => {
 
   /** 向会话发送下一轮提示词 */
   async function autoDrive(event) {
-    if (!state.enabled) return
+    const currentMode = mode()
+    if (!isActive(currentMode)) return
 
     const { sessionID } = event.properties
     if (!sessionID) return
@@ -45,16 +117,20 @@ const tui = async (api, options) => {
     const current = state.turns.get(sessionID) ?? 0
     if (current >= state.maxTurns) return
 
+    const prompt = getPromptText(currentMode)
+    if (!prompt) return
+
     state.turns.set(sessionID, current + 1)
     setTurnCount(computeTurnCount())
 
     try {
+      const label = currentMode === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
       console.warn(
-        `[auto-drive] 🚀 ${current + 1}/${state.maxTurns} "${state.prompt}"`,
+        `[auto-drive] 🚀 ${current + 1}/${state.maxTurns} ${label}`,
       )
       await api.client.session.prompt({
         sessionID,
-        parts: [{ type: "text", text: state.prompt }],
+        parts: [{ type: "text", text: prompt }],
       })
     } catch (err) {
       console.error(
@@ -66,28 +142,23 @@ const tui = async (api, options) => {
 
   /** 切换开关 */
   function toggle() {
-    state.enabled = !state.enabled
-    setEnabled(state.enabled)
-    if (!state.enabled) {
-      state.turns.clear()
-      setTurnCount(0)
-    }
+    const newMode = mode() === "stop" ? "继续优化" : "stop"
+    setMode(newMode)
+    config.mode = newMode
     api.ui.toast({
-      message: state.enabled
+      message: newMode !== "stop"
         ? "🚀 自动驾驶已启用"
         : "⏸️ 自动驾驶已禁用",
-      variant: state.enabled ? "success" : "warning",
+      variant: newMode !== "stop" ? "success" : "warning",
     })
   }
 
   // ── 注册 Ctrl+P / /auto-drive 命令 ──
   const unregCmd = api.command.register(() => [
     {
-      title: `自动驾驶: ${state.enabled ? "⏸️ 禁用" : "🚀 启用"}`,
-      value: "auto-drive-toggle",
-      description: state.enabled
-        ? `已启用 · ${state.maxTurns} 轮 · "${state.prompt}"`
-        : "点击启用，AI 回复后自动继续",
+      title: `Auto-Drive: ${mode() === "stop" ? "⏸ 已停止" : `🚀 ${mode()}`}`,
+      value: "auto-drive-menu",
+      description: `当前模式: ${mode()}`,
       category: "auto-drive",
       slash: { name: "auto-drive", aliases: ["ad"] },
       onSelect: toggle,
@@ -102,19 +173,42 @@ const tui = async (api, options) => {
     order: 100,
     slots: {
       app_bottom(ctx) {
+        const currentMode = mode()
+        const theme = ctx.theme.current
+
+        if (!isActive(currentMode)) {
+          return (
+            <box paddingLeft={1} paddingRight={1}>
+              <text fg={theme.textMuted}>⏸ AD</text>
+            </box>
+          )
+        }
+
+        if (currentMode === "ai") {
+          return (
+            <box paddingLeft={1} paddingRight={1}>
+              <text fg={theme.primary}>🚀 AD</text>
+              <text fg={theme.text}> 🤖</text>
+            </box>
+          )
+        }
+
+        if (currentMode === "custom") {
+          return (
+            <box paddingLeft={1} paddingRight={1}>
+              <text fg={theme.primary}>🚀 AD</text>
+              <text fg={theme.textMuted}> "</text>
+              <text fg={theme.text}>{config.customPrompt}</text>
+              <text fg={theme.textMuted}>"</text>
+            </box>
+          )
+        }
+
         return (
           <box paddingLeft={1} paddingRight={1}>
-            <Show
-              when={enabled()}
-              fallback={
-                <text fg={ctx.theme.current.textMuted}>⏸ auto-drive</text>
-              }
-            >
-              <text fg={ctx.theme.current.primary}>🚀 auto-drive</text>
-              <text fg={ctx.theme.current.text}>
-                {" "}{turnCount()}/{state.maxTurns}
-              </text>
-            </Show>
+            <text fg={theme.primary}>🚀 AD</text>
+            <text fg={theme.textMuted}> </text>
+            <text fg={theme.text}>{currentMode}</text>
           </box>
         )
       },
