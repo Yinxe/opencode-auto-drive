@@ -95,7 +95,7 @@ cp -r auto-drive .opencode/plugins/
 ## 使用
 
 ### 菜单
-`/auto-drive` 或 `Ctrl+P` → `auto-drive` 打开模式菜单，选择模式后弹窗选择轮次。
+`/auto-drive` 或 `Ctrl+P` → `auto-drive` 打开模式菜单，选择模式后弹窗选择轮次。菜单最底部有「📋 查看配置」入口。
 
 ### 快捷键
 `Ctrl+Alt+A` — 快速切换启用/停止（恢复上次模式）。

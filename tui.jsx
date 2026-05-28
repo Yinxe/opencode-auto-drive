@@ -175,9 +175,9 @@ const tui = async (api, options) => {
       const limitLabel = limit > 0 ? limit : "∞"
       console.log(`[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`)
       // 内层重试：处理瞬时网络错误，session.idle 和 fireImmediate 两条路径都受益
-      const INNER_RETRIES = 2 // 初始尝试失败后最多重试 2 次
+      const INNER_MAX_ATTEMPTS = 3 // 首次 + 最多 2 次重试
       let promptErr
-      for (let attempt = 0; attempt <= INNER_RETRIES; attempt++) {
+      for (let attempt = 0; attempt < INNER_MAX_ATTEMPTS; attempt++) {
         try {
           await api.client.session.prompt({
             sessionID: sid,
@@ -187,9 +187,9 @@ const tui = async (api, options) => {
           break
         } catch (err) {
           promptErr = err
-          if (attempt < INNER_RETRIES) {
+          if (attempt < INNER_MAX_ATTEMPTS - 1) {
             const delay = RETRY_BASE_DELAY_MS * (attempt + 1)
-            console.log(`[auto-drive] ⏳ prompt 重试 ${attempt + 1}/${INNER_RETRIES} (${delay}ms)`)
+            console.log(`[auto-drive] ⏳ prompt 重试 ${attempt + 1}/${INNER_MAX_ATTEMPTS - 1} (${delay}ms)`)
             await new Promise((r) => setTimeout(r, delay))
           }
         }
@@ -199,17 +199,23 @@ const tui = async (api, options) => {
       // 发送成功后才计轮次和序列步进
       state.turns.set(sid, current + 1)
       if (modeMeta[currentMode]?.type === "sequence") {
-        state.seqIndex.set(sid, (state.seqIndex.get(sid) ?? 0) + 1)
-      }
-      bumpTurnRev(prev => prev + 1)
-
-      // 对话完成 → toast 通知
-      if (current > 0) {
+        const prevIdx = state.seqIndex.get(sid) ?? 0
+        state.seqIndex.set(sid, prevIdx + 1)
+        // toast 使用步进前的索引（已完成的那一步）
+        if (current > 0) {
+          const seq = modeMeta[currentMode].sequence
+          api.ui.toast({
+            message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${currentMode} 第${prevIdx + 1}/${seq.length}步`,
+            variant: "info",
+          })
+        }
+      } else if (current > 0) {
         api.ui.toast({
           message: `🚀 第${current + 1}轮完成 (${current + 1}/${limitLabel}) | ${getTaskLabel(modeMeta, config.customPrompt, currentMode, sessionID(), state.seqIndex)}`,
           variant: "info",
         })
       }
+      bumpTurnRev(prev => prev + 1)
       return true
     } catch (err) {
       const msg = err instanceof Error ? err.message : err
@@ -234,16 +240,12 @@ const tui = async (api, options) => {
       return
     }
     console.log("[auto-drive] fireImmediate: session=%s mode=%s", sid, mode())
-    // 失败时最多重试 N-1 次（新 session 可能需要短暂就绪时间）
+    // autoDrive 已有内层重试处理网络错误，外层仅对跳过（null）重试
     for (let i = 0; i < RETRY_MAX_ATTEMPTS; i++) {
       const result = await autoDrive({ properties: { sessionID: sid } })
-      if (result !== false) return // true=成功 null=跳过（都不是错误）
-      if (i < RETRY_MAX_ATTEMPTS - 1) {
-        console.log("[auto-drive] fireImmediate 重试 %d/%d", i + 1, RETRY_MAX_ATTEMPTS - 1)
-        await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * (i + 1)))
-      } else {
-        console.error("[auto-drive] ❌ fireImmediate: 发送失败, 已重试 %d 次", RETRY_MAX_ATTEMPTS - 1)
-      }
+      if (result === true) return
+      if (result === false) break // 错误已由内层重试处理，不重复
+      await new Promise((r) => setTimeout(r, RETRY_BASE_DELAY_MS * (i + 1)))
     }
   }
 
