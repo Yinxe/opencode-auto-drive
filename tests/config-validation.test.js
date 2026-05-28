@@ -90,6 +90,9 @@ describe("test exports", () => {
     expect(console.warn).toHaveBeenCalledWith(
       "[auto-drive] maxTurns 配置无效 (invalid), 回退到 5",
     )
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "warning" }),
+    )
   })
 
   it("warns and falls back to 5 for negative maxTurns", async () => {
@@ -112,6 +115,9 @@ describe("test exports", () => {
     expect(console.warn).toHaveBeenCalledWith(
       "[auto-drive] maxTurns 配置无效 (-3), 回退到 5",
     )
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "warning" }),
+    )
   })
 
   it("warns and falls back to 5 for Infinity maxTurns", async () => {
@@ -133,6 +139,9 @@ describe("test exports", () => {
 
     expect(console.warn).toHaveBeenCalledWith(
       "[auto-drive] maxTurns 配置无效 (Infinity), 回退到 5",
+    )
+    expect(api.ui.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ variant: "warning" }),
     )
   })
 

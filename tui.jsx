@@ -49,6 +49,7 @@ const tui = async (api, options) => {
   // 校验 maxTurns：必须是 >=0 的数字
   if (typeof maxTurnsDefault !== "number" || maxTurnsDefault < 0 || !Number.isFinite(maxTurnsDefault)) {
     console.warn(`[auto-drive] maxTurns 配置无效 (${maxTurnsDefault}), 回退到 5`)
+    try { api.ui.toast({ message: `⚠️ maxTurns 配置无效，已回退到 5`, variant: "warning" }) } catch {}
     maxTurnsDefault = 5
   }
 
@@ -98,6 +99,7 @@ const tui = async (api, options) => {
   for (const [name, prompt] of Object.entries(config.presets ?? {})) {
     if (modeMeta[name]) {
       console.warn(`[auto-drive] 预设名称 "${name}" 与内置模式冲突，已忽略`)
+      try { api.ui.toast({ message: `⚠️ 预设 "${name}" 与内置模式冲突，已忽略`, variant: "warning" }) } catch {}
       continue
     }
     registerMode(name, { type: "preset", label: name, getPrompt: () => prompt })
@@ -105,6 +107,7 @@ const tui = async (api, options) => {
   for (const [name, seq] of Object.entries(config.sequences ?? {})) {
     if (modeMeta[name]) {
       console.warn(`[auto-drive] 序列名称 "${name}" 与内置模式冲突，已忽略`)
+      try { api.ui.toast({ message: `⚠️ 序列 "${name}" 与内置模式冲突，已忽略`, variant: "warning" }) } catch {}
       continue
     }
     registerMode(name, {
@@ -517,6 +520,13 @@ const tui = async (api, options) => {
       },
     },
   })
+
+  // ── 启动通知（测试环境下不显示避免干扰断言） ──
+  if (typeof process === "undefined" || process.env?.NODE_ENV !== "test") {
+    try {
+      api.ui.toast({ message: `🚀 Auto-Drive 已就绪 (${mode() === "stop" ? "⏸ 已停止" : `🚀 ${mode()}`}) — /auto-drive 打开菜单`, variant: "info" })
+    } catch {}
+  }
 
   // ── 清理 ──
   api.lifecycle.onDispose(() => {
