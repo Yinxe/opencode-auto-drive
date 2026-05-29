@@ -5,8 +5,6 @@ import {
   getTaskLabel,
   buildMenuOptions,
 } from "../tui-utils.js"
-import { AI_GUIDE_PROMPT } from "../prompts.js"
-
 // ── Shared test fixtures ──
 
 function createModeMeta(overrides = {}) {
@@ -19,7 +17,11 @@ function createModeMeta(overrides = {}) {
     getPrompt: () => config.customPrompt,
     label: "自定义",
   }
-  meta.ai = { type: "ai", getPrompt: () => AI_GUIDE_PROMPT, label: "AI + 多Agent" }
+  meta["AI + 多Agent"] = {
+    type: "preset",
+    label: "AI + 多Agent",
+    getPrompt: () => "AI + 多Agent 完整提示词",
+  }
   meta["智能迭代"] = {
     type: "preset",
     label: "智能迭代",
@@ -38,8 +40,8 @@ describe("isActive", () => {
     expect(isActive(meta, "stop")).toBe(false)
   })
 
-  it("returns true for ai mode", () => {
-    expect(isActive(meta, "ai")).toBe(true)
+  it("returns true for AI + 多Agent mode", () => {
+    expect(isActive(meta, "AI + 多Agent")).toBe(true)
   })
 
   it("returns true for custom mode with prompt", () => {
@@ -68,9 +70,9 @@ describe("getCurrentPrompt", () => {
     expect(getCurrentPrompt(meta, "stop", "s1", new Map())).toBeNull()
   })
 
-  it("returns AI_GUIDE_PROMPT for ai mode", () => {
+  it("returns preset prompt for AI + 多Agent mode", () => {
     const meta = createModeMeta()
-    expect(getCurrentPrompt(meta, "ai", "s1", new Map())).toBe(AI_GUIDE_PROMPT)
+    expect(getCurrentPrompt(meta, "AI + 多Agent", "s1", new Map())).toBe("AI + 多Agent 完整提示词")
   })
 
   it("returns customPrompt for custom mode", () => {
@@ -94,9 +96,9 @@ describe("getCurrentPrompt", () => {
 // ── getTaskLabel ──
 
 describe("getTaskLabel", () => {
-  it('returns "AI + 多Agent" for ai mode', () => {
+  it('returns "AI + 多Agent" label', () => {
     const meta = createModeMeta()
-    expect(getTaskLabel(meta, null, "ai", null, new Map())).toBe("AI + 多Agent")
+    expect(getTaskLabel(meta, null, "AI + 多Agent", null, new Map())).toBe("AI + 多Agent")
   })
 
   it("returns truncated custom prompt for custom mode", () => {
@@ -131,11 +133,11 @@ describe("buildMenuOptions", () => {
     "功能优先": "prompt text",
   }
 
-  it("returns array with stop/custom/ai entries first", () => {
+  it("returns array with stop/custom entries first", () => {
     const opts = buildMenuOptions(presets)
     expect(opts[0].value).toBe("stop")
     expect(opts[1].value).toBe("custom")
-    expect(opts[2].value).toBe("ai")
+    // presets follow after separator, not hardcoded as entry
   })
 
   it("includes separator after built-in modes", () => {

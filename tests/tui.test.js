@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import plugin from "../tui.jsx"
-import { AI_GUIDE_PROMPT } from "../prompts.js"
+import { DEFAULT_PRESETS } from "../prompts.js"
 import { createMockApi } from "./helpers/mock-api.js"
 
 // ── Solid.js mock (host-provided, not in node_modules) ──
@@ -54,7 +54,7 @@ describe("autoDrive", () => {
 
   // ── 1. Normal flow ──
   it("sends prompt and increments turn counter for active mode", async () => {
-    const api = await setupWithConfig({ mode: "ai", maxTurns: 5 })
+    const api = await setupWithConfig({ mode: "AI + 多Agent", maxTurns: 5 })
     globalThis.__lastApi = api
 
     const result = await plugin.autoDrive(makeEvent())
@@ -62,7 +62,7 @@ describe("autoDrive", () => {
     expect(result).toBe(true)
     expect(api.client.session.prompt).toHaveBeenCalledWith({
       sessionID: "test-session-1",
-      parts: [{ type: "text", text: AI_GUIDE_PROMPT }],
+      parts: [{ type: "text", text: DEFAULT_PRESETS["AI + 多Agent"] }],
     })
     // Turn counter incremented
     expect(console.log).toHaveBeenCalledWith(
@@ -83,7 +83,7 @@ describe("autoDrive", () => {
 
   // ── 3. Subtask session skip ──
   it("skips sessions that have a parentID (subtask)", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     globalThis.__lastApi = api
     api.state.session.get.mockReturnValue({
       parentID: "parent-xyz",
@@ -97,7 +97,7 @@ describe("autoDrive", () => {
 
   // ── 4. Max turns reached ──
   it("stops after maxTurns is reached", async () => {
-    const api = await setupWithConfig({ mode: "ai", maxTurns: 1 })
+    const api = await setupWithConfig({ mode: "AI + 多Agent", maxTurns: 1 })
     globalThis.__lastApi = api
 
     const first = await plugin.autoDrive(makeEvent())
@@ -111,7 +111,7 @@ describe("autoDrive", () => {
 
   // ── 6. Concurrent call protection ──
   it("rejects concurrent calls for the same session (pendingLocks)", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     globalThis.__lastApi = api
 
     let resolvePrompt
@@ -134,7 +134,7 @@ describe("autoDrive", () => {
   // ── 7. API failure ──
   it("returns false when session.prompt rejects", async () => {
     vi.useRealTimers()
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     globalThis.__lastApi = api
     api.client.session.prompt.mockRejectedValue(
       new Error("API rate limit exceeded"),
@@ -152,7 +152,7 @@ describe("autoDrive", () => {
   it("retries on transient error and succeeds on second attempt", async () => {
     vi.useRealTimers()
     vi.spyOn(console, "log").mockImplementation(() => {})
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     globalThis.__lastApi = api
     // First call fails, second succeeds (inner retry handles this)
     api.client.session.prompt
@@ -170,7 +170,7 @@ describe("autoDrive", () => {
 
   // ── 8. Toast after successful prompt (2nd turn onward) ──
   it("fires toast from the second turn", async () => {
-    const api = await setupWithConfig({ mode: "ai", maxTurns: 3 })
+    const api = await setupWithConfig({ mode: "AI + 多Agent", maxTurns: 3 })
     globalThis.__lastApi = api
 
     // First call: no toast (current === 0)
@@ -216,7 +216,7 @@ describe("quickToggle", () => {
   })
 
   it("stops when currently active", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     plugin.quickToggle()
     // mode should now be "stop" — next autoDrive returns null
     const result = await plugin.autoDrive(makeEvent())
@@ -224,13 +224,13 @@ describe("quickToggle", () => {
   })
 
   it("restores lastMode when toggled back, firing immediate", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     plugin.quickToggle() // stop
     const result1 = await plugin.autoDrive(makeEvent())
     expect(result1).toBeNull()
 
     api.client.session.prompt.mockClear()
-    plugin.quickToggle() // restore to ai — fires prompt via fireImmediate
+    plugin.quickToggle() // restore — fires prompt via fireImmediate
     await vi.waitFor(() => {
       expect(api.client.session.prompt).toHaveBeenCalled()
     })
@@ -269,7 +269,7 @@ describe("commitMode", () => {
   it("sets mode and maxTurns, fires immediate", async () => {
     const api = await setupWithConfig({ mode: "stop" })
     api.client.session.prompt.mockClear()
-    plugin.commitMode("ai", 10)
+    plugin.commitMode("AI + 多Agent", 10)
     await vi.waitFor(() => {
       expect(api.client.session.prompt).toHaveBeenCalled()
     })
@@ -299,13 +299,13 @@ describe("fireImmediate", () => {
   })
 
   it("sends prompt for current route session", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     await plugin.fireImmediate()
     expect(api.client.session.prompt).toHaveBeenCalled()
   })
 
   it("does nothing when not on a session route", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     api.route.current = { name: "chat" }
     await plugin.fireImmediate()
     expect(api.client.session.prompt).not.toHaveBeenCalled()
@@ -324,7 +324,7 @@ describe("showConfig", () => {
   })
 
   it("registers auto-drive-config command with slash alias", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     const cmds = api.command.register.mock.calls[0][0]()
     const configCmd = cmds.find((c) => c.value === "auto-drive-config")
     expect(configCmd).toBeTruthy()
@@ -333,7 +333,7 @@ describe("showConfig", () => {
   })
 
   it("opens dialog with mode and turn info when selected", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     const cmds = api.command.register.mock.calls[0][0]()
     const configCmd = cmds.find((c) => c.value === "auto-drive-config")
     configCmd.onSelect()
@@ -344,7 +344,7 @@ describe("showConfig", () => {
     const dialogJsx = renderFn()
     expect(dialogJsx.props.title).toBe("Auto-Drive 配置")
     expect(dialogJsx.props.options[0].title).toContain("🚀")
-    expect(dialogJsx.props.options[0].title).toContain("ai")
+    expect(dialogJsx.props.options[0].title).toContain("AI + 多Agent")
     expect(dialogJsx.props.options[1].value).toBe("close")
   })
 
@@ -360,7 +360,7 @@ describe("showConfig", () => {
   })
 
   it("close option clears dialog", async () => {
-    const api = await setupWithConfig({ mode: "ai" })
+    const api = await setupWithConfig({ mode: "AI + 多Agent" })
     const cmds = api.command.register.mock.calls[0][0]()
     const configCmd = cmds.find((c) => c.value === "auto-drive-config")
     configCmd.onSelect()

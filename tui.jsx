@@ -3,7 +3,6 @@ import { createSignal, Show } from "solid-js"
 import { readFileSync } from "fs"
 import { join } from "path"
 import {
-  AI_GUIDE_PROMPT,
   DEFAULT_PRESETS,
 } from "./prompts.js"
 import {
@@ -90,11 +89,6 @@ const tui = async (api, options) => {
     getPrompt: () => config.customPrompt,
     label: "自定义",
   })
-  registerMode("ai", {
-    type: "ai",
-    getPrompt: () => AI_GUIDE_PROMPT,
-    label: "AI + 多Agent",
-  })
 
   for (const [name, prompt] of Object.entries(config.presets ?? {})) {
     if (modeMeta[name]) {
@@ -178,7 +172,8 @@ const tui = async (api, options) => {
       const prompt = getCurrentPrompt(modeMeta, currentMode, sessionID(), state.seqIndex)
       if (!prompt) return null
 
-      const label = modeMeta[currentMode]?.type === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
+      const meta = modeMeta[currentMode]
+      const label = meta?.label ?? `"${prompt.slice(0, 30)}"`
       const limitLabel = limit > 0 ? limit : "∞"
       console.log(`[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`)
       // 内层重试：处理瞬时网络错误
