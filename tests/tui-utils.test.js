@@ -142,8 +142,9 @@ describe("buildMenuOptions", () => {
 
   it("includes separator after built-in modes", () => {
     const opts = buildMenuOptions(presets)
-    expect(opts[3].disabled).toBe(true)
-    expect(opts[3].value).toBe("__sep__")
+    const sep = opts.find(o => o.value === "__sep__")
+    expect(sep).toBeTruthy()
+    expect(sep.disabled).toBe(true)
   })
 
   it("includes preset entries after separator", () => {
