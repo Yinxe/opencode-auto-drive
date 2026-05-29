@@ -22,44 +22,11 @@ vi.mock("solid-js", () => {
   }
 })
 
-// ── Mock loadConfig so autoDrive tests don't touch disk ──
-vi.mock("../loadConfig.js", async (importOriginal) => {
-  const original = await importOriginal()
-  return {
-    ...original,
-    loadConfig: vi.fn().mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: 5,
-        presets: { "继续优化": "继续优化当前功能" },
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    }),
-    saveProjectConfig: vi.fn().mockResolvedValue(),
-    readJSON: vi.fn().mockResolvedValue(null),
-  }
-})
-
-// ── Config helper: create a mockApi + call tui with given mode config ──
+// ── Config helper: create a mockApi + call tui with given config overrides ──
 
 async function setupWithConfig(configOverrides = {}) {
-  const { loadConfig } = await import("../loadConfig.js")
-  loadConfig.mockResolvedValue({
-    merged: {
-      mode: "stop",
-      customPrompt: "",
-      maxTurns: 5,
-      presets: { "继续优化": "继续优化当前功能" },
-      sequences: {},
-      ...configOverrides,
-    },
-    projectPath: "/tmp/test-auto-drive.json",
-  })
-
   const api = createMockApi()
-  await plugin.tui(api, {})
+  await plugin.tui(api, configOverrides)
   return api
 }
 
@@ -70,14 +37,10 @@ function makeEvent(sessionID = "test-session-1") {
 // ── Tests ──
 
 describe("autoDrive", () => {
-  /** @type {import("../loadConfig.js").loadConfig} */
-  let loadConfigMock
-
   beforeEach(async () => {
     vi.useFakeTimers()
     vi.spyOn(console, "log").mockImplementation(() => {})
     vi.spyOn(console, "error").mockImplementation(() => {})
-    loadConfigMock = (await import("../loadConfig.js")).loadConfig
   })
 
   afterEach(() => {
@@ -151,9 +114,6 @@ describe("autoDrive", () => {
     const api = await setupWithConfig({ mode: "ai" })
     globalThis.__lastApi = api
 
-    // Manually add a lock to simulate in-flight
-    // We need access to pendingLocks, which is internal.
-    // Instead, make the first call slow by delaying prompt resolution.
     let resolvePrompt
     api.client.session.prompt.mockReturnValue(
       new Promise((r) => { resolvePrompt = r }),
@@ -228,16 +188,16 @@ describe("autoDrive", () => {
   })
 
   // ── 10. Export verification (the mechanism works) ──
-  it("exposes autoDrive on plugin after tui() call", async () => {
-    // Reset plugin state by calling tui again
+  it("exposes internal functions on plugin after tui() call", async () => {
     const api = createMockApi()
     await plugin.tui(api, {})
 
     expect(typeof plugin.autoDrive).toBe("function")
-    expect(typeof plugin.saveConfigFile).toBe("function")
     expect(typeof plugin.quickToggle).toBe("function")
     expect(typeof plugin.fireImmediate).toBe("function")
     expect(typeof plugin.commitMode).toBe("function")
+    // saveConfigFile was removed — not exported
+    expect(plugin.saveConfigFile).toBeUndefined()
   })
 })
 
@@ -271,7 +231,6 @@ describe("quickToggle", () => {
 
     api.client.session.prompt.mockClear()
     plugin.quickToggle() // restore to ai — fires prompt via fireImmediate
-    // fireImmediate is async but fire-and-forget; drain microtask queue
     await vi.waitFor(() => {
       expect(api.client.session.prompt).toHaveBeenCalled()
     })
@@ -280,7 +239,7 @@ describe("quickToggle", () => {
   it("uses first preset when no lastMode exists", async () => {
     const api = await setupWithConfig({ mode: "stop", presets: { "继续优化": "优化" } })
     api.client.session.prompt.mockClear()
-    plugin.quickToggle() // activates preset + fires prompt via fireImmediate
+    plugin.quickToggle() // activates first preset + fires prompt
     await vi.waitFor(() => {
       expect(api.client.session.prompt).toHaveBeenCalled()
     })
@@ -307,13 +266,10 @@ describe("commitMode", () => {
     vi.useRealTimers()
   })
 
-  it("sets mode and maxTurns, saves config, fires immediate", async () => {
+  it("sets mode and maxTurns, fires immediate", async () => {
     const api = await setupWithConfig({ mode: "stop" })
     api.client.session.prompt.mockClear()
     plugin.commitMode("ai", 10)
-    // commitMode calls saveConfigFile + fireImmediate (prompt via fire-and-forget)
-    const { saveProjectConfig } = await import("../loadConfig.js")
-    expect(saveProjectConfig).toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(api.client.session.prompt).toHaveBeenCalled()
     })
@@ -322,7 +278,6 @@ describe("commitMode", () => {
   it("shows warning toast for inactive mode (empty customPrompt)", async () => {
     const api = await setupWithConfig({ mode: "stop", customPrompt: "" })
     plugin.commitMode("custom", 3)
-    // Warning toast about inactive mode
     expect(api.ui.toast).toHaveBeenCalledWith(
       expect.objectContaining({ variant: "warning" })
     )
@@ -351,7 +306,6 @@ describe("fireImmediate", () => {
 
   it("does nothing when not on a session route", async () => {
     const api = await setupWithConfig({ mode: "ai" })
-    // Override route to non-session
     api.route.current = { name: "chat" }
     await plugin.fireImmediate()
     expect(api.client.session.prompt).not.toHaveBeenCalled()
@@ -386,7 +340,6 @@ describe("showConfig", () => {
     expect(api.ui.dialog.setSize).toHaveBeenCalledWith("large")
     expect(api.ui.dialog.replace).toHaveBeenCalled()
 
-    // Call the render function to inspect dialog content
     const renderFn = api.ui.dialog.replace.mock.calls[0][0]
     const dialogJsx = renderFn()
     expect(dialogJsx.props.title).toBe("Auto-Drive 配置")
@@ -413,47 +366,7 @@ describe("showConfig", () => {
     configCmd.onSelect()
     const renderFn = api.ui.dialog.replace.mock.calls[0][0]
     const dialogJsx = renderFn()
-    // Simulate selecting the close option
     dialogJsx.props.onSelect({ value: "close" })
     expect(api.ui.dialog.clear).toHaveBeenCalled()
   })
 })
-
-// ── saveConfigFile ──
-
-describe("saveConfigFile", () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.spyOn(console, "error").mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-    vi.useRealTimers()
-  })
-
-  it("calls saveProjectConfig with mode, maxTurns, customPrompt, presets", async () => {
-    const api = await setupWithConfig({ mode: "ai", maxTurns: 10, customPrompt: "test" })
-    const { saveProjectConfig } = await import("../loadConfig.js")
-    saveProjectConfig.mockClear()
-    await plugin.saveConfigFile()
-    expect(saveProjectConfig).toHaveBeenCalledTimes(1)
-    const [path, data] = saveProjectConfig.mock.calls[0]
-    expect(data.mode).toBe("ai")
-    expect(data.maxTurns).toBe(10)
-    expect(data.customPrompt).toBe("test")
-    expect(data.presets).toBeTruthy()
-  })
-
-  it("shows error toast when save fails", async () => {
-    const api = await setupWithConfig()
-    const { saveProjectConfig } = await import("../loadConfig.js")
-    saveProjectConfig.mockRejectedValueOnce(new Error("disk full"))
-    await plugin.saveConfigFile()
-    // Error toast should be shown
-    expect(api.ui.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ variant: "error" }),
-    )
-  })
-})
-

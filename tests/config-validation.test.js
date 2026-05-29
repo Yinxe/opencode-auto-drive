@@ -19,26 +19,6 @@ vi.mock("solid-js", () => {
   }
 })
 
-// ── Mock loadConfig so we can override config per test ──
-vi.mock("../loadConfig.js", async (importOriginal) => {
-  const original = await importOriginal()
-  return {
-    ...original,
-    loadConfig: vi.fn().mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: 5,
-        presets: {},
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    }),
-    saveProjectConfig: vi.fn().mockResolvedValue(),
-    readJSON: vi.fn().mockResolvedValue(null),
-  }
-})
-
 import plugin from "../tui.jsx"
 import { createMockApi } from "./helpers/mock-api.js"
 
@@ -63,28 +43,16 @@ describe("test exports", () => {
     await plugin.tui(api, {})
     globalThis.__lastApi = api
     expect(typeof plugin.autoDrive).toBe("function")
-    expect(typeof plugin.saveConfigFile).toBe("function")
     expect(typeof plugin.quickToggle).toBe("function")
     expect(typeof plugin.fireImmediate).toBe("function")
     expect(typeof plugin.commitMode).toBe("function")
+    // saveConfigFile was removed
+    expect(plugin.saveConfigFile).toBeUndefined()
   })
 
   it("warns and falls back to 5 for non-numeric maxTurns", async () => {
-    // Mock loadConfig to return a non-numeric maxTurns
-    const { loadConfig } = await import("../loadConfig.js")
-    vi.mocked(loadConfig).mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: "invalid",
-        presets: {},
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    })
-
     const api = createMockApi()
-    await plugin.tui(api, {})
+    await plugin.tui(api, { maxTurns: "invalid" })
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
@@ -96,20 +64,8 @@ describe("test exports", () => {
   })
 
   it("warns and falls back to 5 for negative maxTurns", async () => {
-    const { loadConfig } = await import("../loadConfig.js")
-    vi.mocked(loadConfig).mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: -3,
-        presets: {},
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    })
-
     const api = createMockApi()
-    await plugin.tui(api, {})
+    await plugin.tui(api, { maxTurns: -3 })
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
@@ -121,20 +77,8 @@ describe("test exports", () => {
   })
 
   it("warns and falls back to 5 for Infinity maxTurns", async () => {
-    const { loadConfig } = await import("../loadConfig.js")
-    vi.mocked(loadConfig).mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: Infinity,
-        presets: {},
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    })
-
     const api = createMockApi()
-    await plugin.tui(api, {})
+    await plugin.tui(api, { maxTurns: Infinity })
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(
@@ -146,20 +90,8 @@ describe("test exports", () => {
   })
 
   it("warns and skips preset whose name conflicts with built-in mode", async () => {
-    const { loadConfig } = await import("../loadConfig.js")
-    vi.mocked(loadConfig).mockResolvedValue({
-      merged: {
-        mode: "stop",
-        customPrompt: "",
-        maxTurns: 5,
-        presets: { stop: "should be ignored" },
-        sequences: {},
-      },
-      projectPath: "/tmp/test-auto-drive.json",
-    })
-
     const api = createMockApi()
-    await plugin.tui(api, {})
+    await plugin.tui(api, { presets: { stop: "should be ignored" } })
     globalThis.__lastApi = api
 
     expect(console.warn).toHaveBeenCalledWith(

@@ -1,13 +1,11 @@
 /** @jsxImportSource @opentui/solid */
 import { createSignal, Show } from "solid-js"
+import { readFileSync } from "fs"
+import { join } from "path"
 import {
   AI_GUIDE_PROMPT,
+  DEFAULT_PRESETS,
 } from "./prompts.js"
-import {
-  loadConfig,
-  saveProjectConfig,
-  readJSON,
-} from "./loadConfig.js"
 import {
   getCurrentPrompt,
   isActive,
@@ -19,35 +17,36 @@ import {
  * OpenCode 自动驾驶插件
  *
  * 监听 session.idle，AI 回复结束后自动发送下一轮 prompt。
- * 支持停止 / 自定义 / AI + 多Agent / 预设 / 序列五种模式。
+ * 支持停止 / 自定义 / AI + 多Agent / 预设 四种模式。
  *
  * 使用方式：
  *   /auto-drive 或 Ctrl+P → auto-drive → Enter    打开模式菜单
  *   ├─ ⏸ 停止
  *   ├─ ✏️ 自定义（弹窗输入提示词）
  *   ├─ 🤖 AI + 多Agent
- *   └─ 预设（"继续优化"、"修复 Bug"等）
+ *   └─ 预设
  *
  *   Ctrl+Alt+A    快速切换启用/停止
  *
- * 预设配置（tui.json 或 auto-drive.json）：
- *   "pluginConfig": {
- *     "auto-drive": { "mode": "继续优化", "maxTurns": 10 }
- *   }
+ * 如果项目根目录存在 AUTODRIVE.md，自动注册为一项可用预设。
  */
 
 /** @type {import('@opencode-ai/plugin/tui').TuiPlugin} */
 const tui = async (api, options) => {
   const projectDir = api.state.path.directory
-  const { merged: config, projectPath } = await loadConfig(projectDir)
 
-  // Options 最高优先级覆盖
+  // ── 默认配置（不使用配置文件） ──
+  const config = {
+    mode: "stop",
+    customPrompt: "",
+    maxTurns: 5,
+    presets: { ...DEFAULT_PRESETS },
+  }
   if (options?.mode !== undefined) config.mode = options.mode
   if (options?.customPrompt !== undefined) config.customPrompt = options.customPrompt
   if (options?.presets) config.presets = { ...config.presets, ...options.presets }
 
   let maxTurnsDefault = options?.maxTurns ?? config.maxTurns ?? 5
-  // 校验 maxTurns：必须是 >=0 的数字
   if (typeof maxTurnsDefault !== "number" || maxTurnsDefault < 0 || !Number.isFinite(maxTurnsDefault)) {
     console.warn(`[auto-drive] maxTurns 配置无效 (${maxTurnsDefault}), 回退到 5`)
     try { api.ui.toast({ message: `⚠️ maxTurns 配置无效，已回退到 5`, variant: "warning" }) } catch {}
@@ -78,7 +77,7 @@ const tui = async (api, options) => {
       ? api.route.current?.params?.sessionID ?? null
       : null,
   )
-  const [turnRev, bumpTurnRev] = createSignal(0) // state.turns 是普通 Map，SolidJS 不追踪变异，bump 此信号强制状态栏重渲染
+  const [turnRev, bumpTurnRev] = createSignal(0)
 
   // ── 模式注册表 ──
   /** 集中管理各种模式的元数据和行为 */
@@ -106,6 +105,24 @@ const tui = async (api, options) => {
     registerMode(name, { type: "preset", label: name, getPrompt: () => prompt })
   }
 
+  // ── AUTODRIVE.md 支持 ──
+  // 如果项目根目录存在 AUTODRIVE.md，将其内容注册为一个独立模式
+  let autodrivePrompt = ""
+  try {
+    const autodrivePath = join(projectDir, "AUTODRIVE.md")
+    const content = readFileSync(autodrivePath, "utf-8")
+    if (content.trim()) {
+      autodrivePrompt = content.trim()
+      registerMode("📄 AUTODRIVE.md", {
+        type: "preset",
+        label: "📄 AUTODRIVE.md",
+        getPrompt: () => autodrivePrompt,
+      })
+    }
+  } catch {
+    // AUTODRIVE.md 不存在或不可读，忽略
+  }
+
   // 轮询检测路由变更，更新 sessionID 信号
   const routePoll = setInterval(() => {
     const route = api.route.current
@@ -129,7 +146,7 @@ const tui = async (api, options) => {
 
   /** 获取当前 session 的轮次（用于状态栏响应式显示） */
   function getSessionTurns() {
-    turnRev() // 每次 autoDrive 递增，强制重渲染
+    turnRev()
     const sid = sessionID()
     if (!sid) return 0
     return state.turns.get(sid) ?? 0
@@ -164,8 +181,8 @@ const tui = async (api, options) => {
       const label = modeMeta[currentMode]?.type === "ai" ? "🤖" : `"${prompt.slice(0, 30)}"`
       const limitLabel = limit > 0 ? limit : "∞"
       console.log(`[auto-drive] 🚀 ${current + 1}/${limitLabel} ${label}`)
-      // 内层重试：处理瞬时网络错误，session.idle 和 fireImmediate 两条路径都受益
-      const INNER_MAX_ATTEMPTS = 3 // 首次 + 最多 2 次重试
+      // 内层重试：处理瞬时网络错误
+      const INNER_MAX_ATTEMPTS = 3
       let promptErr
       for (let attempt = 0; attempt < INNER_MAX_ATTEMPTS; attempt++) {
         try {
@@ -191,7 +208,6 @@ const tui = async (api, options) => {
       if (modeMeta[currentMode]?.type === "sequence") {
         const prevIdx = state.seqIndex.get(sid) ?? 0
         state.seqIndex.set(sid, prevIdx + 1)
-        // toast 使用步进前的索引（已完成的那一步）
         if (current > 0) {
           const seq = modeMeta[currentMode].sequence
           try {
@@ -221,7 +237,7 @@ const tui = async (api, options) => {
     }
   }
 
-  /** 对当前会话立即执行一次自动驾驶（走 autoDrive 统一逻辑） */
+  /** 对当前会话立即执行一次自动驾驶 */
   async function fireImmediate() {
     const route = api.route.current
     if (route.name !== "session") {
@@ -234,37 +250,14 @@ const tui = async (api, options) => {
       return
     }
     console.log(`[auto-drive] fireImmediate: session=${sid} mode=${mode()}`)
-    // autoDrive 已有内层重试处理网络错误，外层直接调用即可
     await autoDrive({ properties: { sessionID: sid } })
   }
 
-  /** 保存当前配置到项目级文件（保持未知字段不丢失） */
-  async function saveConfigFile() {
-    // 读取已有配置，保留未知字段（补丁合并）
-    const existing = (await readJSON(projectPath)) ?? {}
-    const data = {
-      ...existing,
-      mode: mode(),
-      maxTurns: maxTurns(),
-      customPrompt: config.customPrompt,
-      presets: config.presets,
-    }
-    // 写回时自动删除 undefined 字段
-    for (const k of Object.keys(data)) {
-      if (data[k] === undefined) delete data[k]
-    }
-    await saveProjectConfig(projectPath, data).catch((err) => {
-      console.error("[auto-drive] 配置保存失败:", err)
-      try { api.ui.toast({ message: `配置保存失败: ${err.message}`, variant: "error" }) } catch {}
-    })
-  }
-
-  /** 统一提交模式切换：设置轮次、模式、保存并触发 */
+  /** 统一提交模式切换：设置轮次、模式并触发 */
   function commitMode(modeName, turnLimit) {
     setMaxTurns(turnLimit)
     setMode(modeName)
     if (modeName !== "stop") setLastMode(modeName)
-    saveConfigFile()
     // 如果选择的模式无有效提示词，提醒用户
     if (!isActive(modeMeta, modeName)) {
       try { api.ui.toast({ message: `⚠️ 模式 "${modeName}" 无有效提示词，自动驾驶不会触发`, variant: "warning" }) } catch {}
@@ -280,7 +273,6 @@ const tui = async (api, options) => {
     } else if (lastMode()) {
       const previous = lastMode()
       setMode(previous)
-      saveConfigFile()
       fireImmediate()
       return
     } else {
@@ -289,12 +281,10 @@ const tui = async (api, options) => {
       if (first) {
         setMode(first)
         setLastMode(first)
-        saveConfigFile()
         fireImmediate()
         return
       }
     }
-    saveConfigFile()
   }
 
   /** 显示轮次选择器 */
@@ -353,10 +343,22 @@ const tui = async (api, options) => {
   function showMenu() {
     const DialogSelect = api.ui.DialogSelect
     api.ui.dialog.setSize("medium")
+    const options = buildMenuOptions(config.presets)
+    // 检测到 AUTODRIVE.md 时，在预设区域顶部插入一个选项
+    if (modeMeta["📄 AUTODRIVE.md"]) {
+      const sepIdx = options.findIndex(o => o.value === "__sep__")
+      if (sepIdx !== -1) {
+        options.splice(sepIdx + 1, 0, {
+          title: "📄 AUTODRIVE.md",
+          value: "📄 AUTODRIVE.md",
+          description: "使用项目根目录的 AUTODRIVE.md 作为自定义提示词",
+        })
+      }
+    }
     api.ui.dialog.replace(() => (
       <DialogSelect
         title="Auto-Drive 自动驾驶"
-        options={buildMenuOptions(config.presets)}
+        options={options}
         current={mode()}
         onSelect={(option) => {
           if (option.disabled) {
@@ -366,7 +368,6 @@ const tui = async (api, options) => {
           if (option.value === "stop") {
             api.ui.dialog.clear()
             setMode("stop")
-            saveConfigFile()
             return
           }
           if (option.value === "custom") {
@@ -409,7 +410,7 @@ const tui = async (api, options) => {
     ))
   }
 
-  /** 显示当前合并后的配置信息 */
+  /** 显示当前配置信息 */
   function showConfig() {
     const DialogSelect = api.ui.DialogSelect
     api.ui.dialog.setSize("large")
@@ -424,8 +425,6 @@ const tui = async (api, options) => {
       ...Object.entries(config.presets ?? {}).map(
         ([k, v]) => `  ${k}: "${String(v).slice(0, 60)}"`,
       ),
-      ``,
-      `配置优先级: 全局 → 项目 → 插件选项`,
     ].join("\n")
 
     api.ui.dialog.replace(() => (
@@ -455,7 +454,7 @@ const tui = async (api, options) => {
     {
       title: "Auto-Drive: 查看配置",
       value: "auto-drive-config",
-      description: "显示当前合并后的配置（全局+项目+插件选项）",
+      description: "查看当前模式、轮次和预设",
       category: "auto-drive",
       slash: { name: "auto-drive-config", aliases: ["adc"] },
       onSelect: showConfig,
@@ -523,9 +522,9 @@ const tui = async (api, options) => {
     pendingLocks.clear()
   })
 
-  // 测试用导出：在测试环境中将内部函数绑定到 plugin 对象
+  // 测试用导出
   if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") {
-    Object.assign(plugin, { autoDrive, saveConfigFile, quickToggle, fireImmediate, commitMode })
+    Object.assign(plugin, { autoDrive, quickToggle, fireImmediate, commitMode })
   }
 }
 
